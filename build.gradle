@@ -1,7 +1,7 @@
 // Top-level build file
 buildscript {
     repositories {
-        mavenLocal ()
+        mavenLocal()
         mavenCentral()
         maven { url 'https://maven.google.com' }
         maven { url 'https://central.sonatype.com/repository/maven-snapshots/' }
@@ -17,10 +17,8 @@ buildscript {
 
 allprojects {
     repositories {
-        //jcenter()
-        mavenLocal ()
+        mavenLocal()
         mavenCentral()
-        // Do not use google()
         maven { url 'https://maven.google.com' }
         maven { url 'https://central.sonatype.com/repository/maven-snapshots/' }
         maven { url 'https://jitpack.io' }
@@ -36,7 +34,7 @@ ext {
     ndkVersion = '24.0.8215888'
     compileSdk = 34
     buildTools = '34.0.0'
-    targetSdk = 28
+    targetSdk = 34
     versionName = '1.0'
     versionCode = 1
     group = 'com.elite.reflection'

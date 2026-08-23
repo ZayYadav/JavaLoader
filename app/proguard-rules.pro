@@ -1,41 +1,51 @@
-# ===== PUBGM GAME LOADER - OPTIMIZED SIZE REDUCTION PROGUARD =====
+# OneCore MyThos release shrinking/obfuscation.
+# R8 is allowed to optimize and rename ordinary Java code; only framework/JNI entry points stay fixed.
 
-# Disable features that increase size or break code
--dontobfuscate
--dontoptimize
--dontpreverify
--ignorewarnings
+-keepattributes *Annotation*,Signature,InnerClasses,EnclosingMethod
+-renamesourcefileattribute SourceFile
+-allowaccessmodification
 
-# Keep critical attributes
--keepattributes *Annotation*,Signature,InnerClasses,EnclosingMethod,SourceFile,LineNumberTable
-
-# ===== PROJECT PACKAGES PROTECTION (Do not touch package name) =====
--keep class com.pubgm.** { *; }
--keep interface com.pubgm.** { *; }
-
-# ===== NATIVE / JNI PROTECTION (Critical for ESP and Hacks) =====
--keepclasseswithmembernames class * {
-    native <methods>;
-}
--keepclasseswithmembers class * {
+# JNI symbols are name-sensitive.
+-keepclasseswithmembernames,includedescriptorclasses class * {
     native <methods>;
 }
 
-# Keep all ESPView drawing methods called from JNI
--keep class com.pubgm.floating.ESPView {
-    public <methods>;
-    protected <methods>;
-    <fields>;
+# Native signing verifier is resolved through exact conventional JNI names.
+-keep class com.pubgm.security.NativeSigningVerifier {
+    private static native boolean verifySigningIdentity(
+        byte[][],
+        byte[][],
+        java.lang.String,
+        java.lang.String
+    );
+    private static native boolean verifyProcessBoundApkNative(
+        java.lang.String,
+        java.lang.String
+    );
+    private static native byte[][] readApkV2SignerCertificatesNative(
+        java.lang.String,
+        java.lang.String
+    );
 }
+-keepnames class com.pubgm.security.NativeSigningVerifier
 
-# Keep Toggle and Service classes JNI methods
--keep class com.pubgm.floating.ToggleAim { native <methods>; public <methods>; }
--keep class com.pubgm.floating.ToggleBullet { native <methods>; public <methods>; }
--keep class com.pubgm.floating.ToggleSimulation { native <methods>; public <methods>; }
--keep class com.pubgm.floating.FloatLogo { native <methods>; public <methods>; }
--keep class com.pubgm.floating.Overlay { native <methods>; public <methods>; }
+# Native wrapper policy uses an exact JNI symbol as well.
+-keep class com.pubgm.security.WrapperPayloadGuard {
+    private static native boolean verifyArchiveAndRuntimeNative(
+        java.lang.String,
+        java.lang.String
+    );
+}
+-keepnames class com.pubgm.security.WrapperPayloadGuard
 
-# ===== HCORE / BLACKBOX PROTECTION (Do not touch hcore) =====
+# The shipped native client resolves this compatibility facade by its existing JNI name.
+-keep class com.pubgm.Login { *; }
+
+# Existing native/floating/game runtime entry points are left untouched by this defensive hardening pass.
+-keep class com.pubgm.floating.** { *; }
+-keep class com.pubgm.libhelper.** { *; }
+
+# Legacy reflection/compatibility namespaces retained only where the existing app still references them.
 -keep class com.hcore.** { *; }
 -keep interface com.hcore.** { *; }
 -keep class top.niunaijun.blackbox.** { *; }
@@ -43,30 +53,24 @@
 -keep class com.virtualx.** { *; }
 -keep class top.niunaijun.RIYAZ.** { *; }
 
-# ===== ANDROID COMPONENTS =====
--keep public class * extends android.app.Activity
--keep public class * extends android.app.Application
--keep public class * extends android.app.Service
--keep public class * extends android.content.BroadcastReceiver
--keep public class * extends android.content.ContentProvider
--keep public class * extends android.view.View {
+# Manifest/framework components need stable class names, but their code can still be optimized.
+-keep,allowoptimization class * extends android.app.Activity
+-keep,allowoptimization class * extends android.app.Application
+-keep,allowoptimization class * extends android.app.Service
+-keep,allowoptimization class * extends android.content.BroadcastReceiver
+-keep,allowoptimization class * extends android.content.ContentProvider
+-keep,allowoptimization public class * extends android.view.View {
     public <init>(android.content.Context);
     public <init>(android.content.Context, android.util.AttributeSet);
     public <init>(android.content.Context, android.util.AttributeSet, int);
 }
 
-# ===== THIRD PARTY LIBS (Shrink but keep API) =====
--keep class net.lingala.zip4j.** { *; }
--keep class org.jdeferred.** { *; }
--keep class com.github.tiann.** { *; }
--keep class me.weishu.reflection.** { *; }
-
-# ===== PARCELABLE / SERIALIZABLE =====
 -keep class * implements android.os.Parcelable {
     public static final android.os.Parcelable$Creator *;
 }
 
-# Force Single DEX by allowing R8 to remove unused library code
+-dontwarn org.jetbrains.annotations.**
+
 -assumenosideeffects class android.util.Log {
     public static *** d(...);
     public static *** v(...);

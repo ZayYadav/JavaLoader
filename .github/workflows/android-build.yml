@@ -1,0 +1,245 @@
+name: Build JavaLoader APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'app/**'
+      - 'gradle/**'
+      - 'build.gradle'
+      - 'settings.gradle'
+      - 'signing.gradle'
+      - 'gradle.properties'
+      - '.github/workflows/android-build.yml'
+  pull_request:
+    paths:
+      - 'app/**'
+      - 'gradle/**'
+      - 'build.gradle'
+      - 'settings.gradle'
+      - 'signing.gradle'
+      - 'gradle.properties'
+      - '.github/workflows/android-build.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: javaloader-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build and verify APKs
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    env:
+      NDK_VERSION: '24.0.8215888'
+      BUILD_TOOLS_VERSION: '34.0.0'
+      JAVA_LOADER_TLS_PINS: ${{ vars.JAVA_LOADER_TLS_PINS }}
+      JAVA_LOADER_API_PUBLIC_KEY_B64: ${{ vars.JAVA_LOADER_API_PUBLIC_KEY_B64 }}
+      JAVA_LOADER_LICENSE_URL: ${{ vars.JAVA_LOADER_LICENSE_URL }}
+      JAVA_LOADER_GAME_ID: ${{ vars.JAVA_LOADER_GAME_ID }}
+      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      RELEASE_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Install Android packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager --install \
+            'platforms;android-34' \
+            "build-tools;${BUILD_TOOLS_VERSION}" \
+            "ndk;${NDK_VERSION}"
+          printf 'sdk.dir=%s\n' "$ANDROID_HOME" > local.properties
+          chmod +x gradlew
+
+      - name: Configure isolated signing identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          KEYSTORE="$RUNNER_TEMP/javaloader-build.jks"
+
+          if [ -n "${ANDROID_KEYSTORE_BASE64:-}" ] \
+            && [ -n "${RELEASE_STORE_PASSWORD:-}" ] \
+            && [ -n "${RELEASE_KEY_ALIAS:-}" ] \
+            && [ -n "${RELEASE_KEY_PASSWORD:-}" ]; then
+            printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE"
+            STORE_PASSWORD="$RELEASE_STORE_PASSWORD"
+            KEY_ALIAS="$RELEASE_KEY_ALIAS"
+            KEY_PASSWORD="$RELEASE_KEY_PASSWORD"
+            ARTIFACT_TIER='production-signing'
+          else
+            STORE_PASSWORD='javaloader-ci-only'
+            KEY_ALIAS='javaloader-ci'
+            KEY_PASSWORD='javaloader-ci-only'
+            ARTIFACT_TIER='ci-test-signing'
+            keytool -genkeypair \
+              -keystore "$KEYSTORE" \
+              -storetype JKS \
+              -storepass "$STORE_PASSWORD" \
+              -keypass "$KEY_PASSWORD" \
+              -alias "$KEY_ALIAS" \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 3650 \
+              -dname 'CN=JavaLoader CI,O=Parallax,C=IN'
+          fi
+
+          test -s "$KEYSTORE"
+          keytool -exportcert \
+            -keystore "$KEYSTORE" \
+            -storepass "$STORE_PASSWORD" \
+            -alias "$KEY_ALIAS" \
+            -file "$RUNNER_TEMP/javaloader-cert.der"
+          CERT_SHA256=$(sha256sum "$RUNNER_TEMP/javaloader-cert.der" | awk '{print toupper($1)}')
+          test "${#CERT_SHA256}" -eq 64
+
+          {
+            echo "STORE_FILE=$KEYSTORE"
+            echo "STORE_PASSWORD=$STORE_PASSWORD"
+            echo "KEY_ALIAS=$KEY_ALIAS"
+            echo "KEY_PASSWORD=$KEY_PASSWORD"
+            echo "JAVA_LOADER_ALLOWED_SIGNING_SHA256=$CERT_SHA256"
+            echo "JAVA_LOADER_ARTIFACT_TIER=$ARTIFACT_TIER"
+          } >> "$GITHUB_ENV"
+
+          echo "Build certificate SHA-256: $CERT_SHA256"
+          echo "Artifact tier: $ARTIFACT_TIER"
+
+      - name: Configure licensing build identity
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ "$JAVA_LOADER_ARTIFACT_TIER" = 'production-signing' ]; then
+            test -n "${JAVA_LOADER_TLS_PINS:-}" || { echo '::error::JAVA_LOADER_TLS_PINS repository variable is required for production signing'; exit 1; }
+            test -n "${JAVA_LOADER_API_PUBLIC_KEY_B64:-}" || { echo '::error::JAVA_LOADER_API_PUBLIC_KEY_B64 repository variable is required for production signing'; exit 1; }
+            test -n "${JAVA_LOADER_LICENSE_URL:-}" || { echo '::error::JAVA_LOADER_LICENSE_URL repository variable is required for production signing'; exit 1; }
+          else
+            if [ -z "${JAVA_LOADER_API_PUBLIC_KEY_B64:-}" ]; then
+              openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$RUNNER_TEMP/ci-license-private.pem" >/dev/null 2>&1
+              JAVA_LOADER_API_PUBLIC_KEY_B64=$(openssl pkey -in "$RUNNER_TEMP/ci-license-private.pem" -pubout -outform DER 2>/dev/null | base64 -w0)
+            fi
+            if [ -z "${JAVA_LOADER_TLS_PINS:-}" ]; then
+              PIN=$(printf 'javaloader-ci-placeholder-pin' | openssl dgst -sha256 -binary | base64 -w0)
+              JAVA_LOADER_TLS_PINS="sha256/${PIN}"
+            fi
+            if [ -z "${JAVA_LOADER_LICENSE_URL:-}" ]; then
+              JAVA_LOADER_LICENSE_URL='https://invalid.example/connect.php'
+            fi
+          fi
+
+          if [ -z "${JAVA_LOADER_GAME_ID:-}" ]; then
+            JAVA_LOADER_GAME_ID='PUBG'
+          fi
+
+          {
+            echo "JAVA_LOADER_API_PUBLIC_KEY_B64=$JAVA_LOADER_API_PUBLIC_KEY_B64"
+            echo "JAVA_LOADER_TLS_PINS=$JAVA_LOADER_TLS_PINS"
+            echo "JAVA_LOADER_LICENSE_URL=$JAVA_LOADER_LICENSE_URL"
+            echo "JAVA_LOADER_GAME_ID=$JAVA_LOADER_GAME_ID"
+          } >> "$GITHUB_ENV"
+
+          echo "License host: $(printf '%s' "$JAVA_LOADER_LICENSE_URL" | sed -E 's#https://([^/]+)/.*#\1#')"
+          echo "Game id: $JAVA_LOADER_GAME_ID"
+
+      - name: Validate Gradle project
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./gradlew --version
+          ./gradlew :app:tasks --no-daemon >/dev/null
+
+      - name: Build debug and release APKs
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p build-logs
+          ./gradlew :app:assembleDebug :app:assembleRelease \
+            --no-daemon --stacktrace \
+            2>&1 | tee build-logs/gradle-build.log
+
+      - name: Verify APK structure and signatures
+        shell: bash
+        run: |
+          set -euo pipefail
+          APKS=$(find app/build/outputs/apk -type f -name '*.apk' -print)
+          test -n "$APKS"
+
+          : > build-logs/apk-verification.txt
+          while IFS= read -r apk; do
+            echo "== $apk ==" | tee -a build-logs/apk-verification.txt
+            unzip -tq "$apk"
+            "$ANDROID_HOME/build-tools/$BUILD_TOOLS_VERSION/apksigner" verify \
+              --verbose --print-certs "$apk" \
+              | tee -a build-logs/apk-verification.txt
+            "$ANDROID_HOME/build-tools/$BUILD_TOOLS_VERSION/zipalign" -c -v 4 "$apk" >/dev/null
+            sha256sum "$apk" | tee -a build-logs/apk-verification.txt
+          done <<< "$APKS"
+
+      - name: Check release APK for accidental secret files
+        shell: bash
+        run: |
+          set -euo pipefail
+          RELEASE_APK=$(find app/build/outputs/apk/release -type f -name '*.apk' -print -quit)
+          test -n "$RELEASE_APK"
+          if unzip -l "$RELEASE_APK" | grep -E 'signing\.properties|local\.properties|\.jks|\.keystore|private\.pem'; then
+            echo 'Local/signing secret file found inside APK' >&2
+            exit 1
+          fi
+
+      - name: Record build metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "artifact_tier=$JAVA_LOADER_ARTIFACT_TIER"
+            echo "commit=$GITHUB_SHA"
+            echo "ndk=$NDK_VERSION"
+            echo "build_tools=$BUILD_TOOLS_VERSION"
+            echo "tls_pinning=configured"
+            echo "license_url=$JAVA_LOADER_LICENSE_URL"
+            echo "game_id=$JAVA_LOADER_GAME_ID"
+          } | tee build-logs/build-metadata.txt
+
+      - name: Upload release APK
+        uses: actions/upload-artifact@v6
+        with:
+          name: javaloader-${{ env.JAVA_LOADER_ARTIFACT_TIER }}-release
+          path: app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v6
+        with:
+          name: javaloader-${{ env.JAVA_LOADER_ARTIFACT_TIER }}-debug
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+
+      - name: Upload build logs
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: javaloader-build-logs
+          path: build-logs/
+          if-no-files-found: warn

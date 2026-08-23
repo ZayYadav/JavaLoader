@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="onecore_bg">#080B10</color>
+    <color name="onecore_bg_alt">#111722</color>
+    <color name="onecore_surface">#F2151A22</color>
+    <color name="onecore_surface_soft">#E61B222D</color>
+    <color name="onecore_gold">#E6B85C</color>
+    <color name="onecore_gold_bright">#F6D68A</color>
+    <color name="onecore_ink">#171006</color>
+    <color name="onecore_text">#F8FAFC</color>
+    <color name="onecore_text_secondary">#AAB4C4</color>
+    <color name="onecore_muted">#697586</color>
+    <color name="onecore_success">#39D98A</color>
+    <color name="onecore_danger">#FF6577</color>
+    <color name="onecore_stroke">#334151</color>
+    <color name="onecore_stroke_gold">#806B512A</color>
+</resources>

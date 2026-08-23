@@ -5,25 +5,114 @@ plugins {
 
 apply from: '../signing.gradle'
 
+def envValue = { String preferred, String legacy ->
+    System.getenv(preferred) ?: System.getenv(legacy) ?: ''
+}
+def javaLoaderAllowedSigningSha256 = providers.gradleProperty('javaLoaderAllowedSigningSha256')
+        .orElse(envValue('ONECORE_ALLOWED_SIGNING_SHA256', 'JAVA_LOADER_ALLOWED_SIGNING_SHA256'))
+        .get()
+        .replace(':', '')
+        .trim()
+        .toUpperCase(java.util.Locale.ROOT)
+def javaLoaderTlsPins = providers.gradleProperty('javaLoaderTlsPins')
+        .orElse(envValue('PARALLAX_TLS_PINS', 'JAVA_LOADER_TLS_PINS'))
+        .get()
+        .trim()
+def javaLoaderApiPublicKey = providers.gradleProperty('javaLoaderApiPublicKey')
+        .orElse(envValue('PARALLAX_API_PUBLIC_KEY_B64', 'JAVA_LOADER_API_PUBLIC_KEY_B64'))
+        .get()
+        .trim()
+def javaLoaderLicenseUrl = providers.gradleProperty('javaLoaderLicenseUrl')
+        .orElse(envValue('PARALLAX_LICENSE_URL', 'JAVA_LOADER_LICENSE_URL'))
+        .get()
+        .trim()
+def javaLoaderGameId = providers.gradleProperty('javaLoaderGameId')
+        .orElse(envValue('PARALLAX_GAME_ID', 'JAVA_LOADER_GAME_ID') ?: 'PUBG')
+        .get()
+        .trim()
+def javaString = { String value ->
+    '"' + (value ?: '').replace('\\', '\\\\').replace('"', '\\"') + '"'
+}
+def releaseTaskRequested = gradle.startParameter.taskNames.any {
+    it.toLowerCase(java.util.Locale.ROOT).contains('release')
+}
+
+if (!javaLoaderAllowedSigningSha256.isEmpty()
+        && !(javaLoaderAllowedSigningSha256 ==~ /^[0-9A-F]{64}(,[0-9A-F]{64})*$/)) {
+    throw new GradleException('Signing SHA-256 must contain one or more 64-digit certificate digests')
+}
+if (!javaLoaderTlsPins.isEmpty()) {
+    def pins = javaLoaderTlsPins.split(',', -1).collect { it.trim() }
+    if (pins.any { !(it ==~ /^sha256\/[A-Za-z0-9+\/]{43}=$/) }) {
+        throw new GradleException('TLS pins must contain comma-separated SHA-256 SPKI pins')
+    }
+}
+if (!javaLoaderLicenseUrl.isEmpty()) {
+    try {
+        def uri = new java.net.URI(javaLoaderLicenseUrl)
+        if (!'https'.equalsIgnoreCase(uri.scheme) || uri.host == null || uri.host.trim().isEmpty()) {
+            throw new GradleException('License URL must be a valid HTTPS URL')
+        }
+    } catch (java.net.URISyntaxException error) {
+        throw new GradleException('License URL is invalid', error)
+    }
+}
+if (!javaLoaderApiPublicKey.isEmpty()) {
+    try {
+        byte[] decoded = java.util.Base64.decoder.decode(javaLoaderApiPublicKey)
+        if (decoded.length < 256 || decoded.length > 1024) {
+            throw new GradleException('Licensing RSA public key has an invalid DER size')
+        }
+    } catch (IllegalArgumentException error) {
+        throw new GradleException('Licensing RSA public key is not valid Base64 DER', error)
+    }
+}
+if (releaseTaskRequested) {
+    if (javaLoaderAllowedSigningSha256.isEmpty()) {
+        throw new GradleException('Signing certificate SHA-256 is required for release builds')
+    }
+    if (javaLoaderTlsPins.isEmpty()) {
+        throw new GradleException('TLS pins are required for release builds')
+    }
+    if (javaLoaderApiPublicKey.isEmpty()) {
+        throw new GradleException('Licensing RSA public key is required for release builds')
+    }
+    if (javaLoaderLicenseUrl.isEmpty()) {
+        throw new GradleException('HTTPS licensing URL is required for release builds')
+    }
+    if (!(javaLoaderGameId ==~ /^[A-Za-z0-9_.-]{2,32}$/)) {
+        throw new GradleException('Game id is invalid')
+    }
+}
+
+// LSParanoid stays annotation-driven. Security/auth classes already carry @Obfuscate;
+// no unsupported global class filter is used, and unrelated native/gameplay packages stay untouched.
+
 android {
     namespace "com.pubgm"
     compileSdk rootProject.ext.compileSdk
     buildToolsVersion rootProject.ext.buildTools
-    
+
     lint {
-       abortOnError false
-       checkReleaseBuilds false
+        abortOnError false
+        checkReleaseBuilds false
     }
-    
+
     defaultConfig {
-        applicationId "com.pubgm"
+        applicationId "OneCore.Vip"
         minSdk rootProject.ext.minSdk
         targetSdk rootProject.ext.targetSdk
         versionCode rootProject.ext.versionCode
         versionName rootProject.ext.versionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        resourceConfigurations += ['en']
+        buildConfigField "String", "EXPECTED_SIGNATURE_SHA256", javaString(javaLoaderAllowedSigningSha256)
+        buildConfigField "String", "JAVA_LOADER_TLS_PINS", javaString(javaLoaderTlsPins)
+        buildConfigField "String", "JAVA_LOADER_API_PUBLIC_KEY_B64", javaString(javaLoaderApiPublicKey)
+        buildConfigField "String", "JAVA_LOADER_LICENSE_URL", javaString(javaLoaderLicenseUrl)
+        buildConfigField "String", "JAVA_LOADER_GAME_ID", javaString(javaLoaderGameId)
     }
-    
+
     splits {
         abi {
             enable true
@@ -32,67 +121,80 @@ android {
             universalApk false
         }
     }
-    
+
     buildTypes {
         release {
+            debuggable false
+            jniDebuggable false
             shrinkResources true
             minifyEnabled true
-            defaultConfig.applicationId = "Game.Loader"
             signingConfig signingConfigs.release
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
         debug {
-            shrinkResources true
-            minifyEnabled true
-            defaultConfig.applicationId = "Game.Loader"
+            debuggable true
+            jniDebuggable true
+            shrinkResources false
+            minifyEnabled false
             signingConfig signingConfigs.debug
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
-    
-    packagingOptions {
+
+    packaging {
+        jniLibs {
+            useLegacyPackaging true
+        }
         resources {
-            excludes += "/META-INF/AL2.0"
-            excludes += "/META-INF/LGPL2.1"
-            excludes += "/META-INF/DEPENDENCIES"
-            excludes += "/META-INF/LICENSE"
-            excludes += "/META-INF/LICENSE.txt"
-            excludes += "/META-INF/license.txt"
-            excludes += "/META-INF/NOTICE"
-            excludes += "/META-INF/NOTICE.txt"
-            excludes += "/META-INF/notice.txt"
-            excludes += "/META-INF/ASL2.0"
-            excludes += "/META-INF/*.kotlin_module"
-            excludes += "/META-INF/gradle/incremental.annotation.processors"
+            excludes += [
+                    '/META-INF/AL2.0',
+                    '/META-INF/LGPL2.1',
+                    '/META-INF/DEPENDENCIES',
+                    '/META-INF/LICENSE',
+                    '/META-INF/LICENSE.txt',
+                    '/META-INF/license.txt',
+                    '/META-INF/NOTICE',
+                    '/META-INF/NOTICE.txt',
+                    '/META-INF/notice.txt',
+                    '/META-INF/ASL2.0',
+                    '/META-INF/*.kotlin_module',
+                    '/META-INF/gradle/incremental.annotation.processors'
+            ]
         }
     }
-        
+
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
     }
-    
+
+    buildFeatures {
+        buildConfig true
+    }
+
     externalNativeBuild {
         ndkBuild {
             path file('src/main/jni/Android.mk')
         }
     }
-    
+
     ndkVersion rootProject.ext.ndkVersion
 }
 
 dependencies {
     implementation fileTree(dir: "libs", include: ["*.jar", "*.aar"])
 
-    implementation 'androidx.appcompat:appcompat:1.2.0'
-    implementation 'com.google.android.material:material:1.11.0'
-    implementation 'net.lingala.zip4j:zip4j:2.9.0'
-    
+    implementation 'com.android.tools.build:apksig:8.2.1'
+    implementation 'androidx.appcompat:appcompat:1.7.1'
+    implementation 'com.google.android.material:material:1.12.0'
+    implementation 'net.lingala.zip4j:zip4j:2.11.5'
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+    implementation 'com.squareup.okio:okio:3.9.0'
+
     implementation("com.github.tiann:FreeReflection:3.1.0") {
         exclude group: 'me.weishu.reflection'
     }
 
-    // BlackBoxCore Dependencies
     implementation "com.github.CodingGay.BlackReflection:core:1.1.4"
     annotationProcessor "com.github.CodingGay.BlackReflection:compiler:1.1.4"
     implementation "com.squareup:javapoet:1.13.0"
