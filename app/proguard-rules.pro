@@ -29,6 +29,20 @@
 }
 -keepnames class com.pubgm.security.NativeSigningVerifier
 
+# Independent production signer root. Native side hard-pins the production certificate SHA-256.
+-keep class com.pubgm.security.ProductionSignerGuard {
+    private static native boolean nativeExpectedDigestMatches(java.lang.String);
+    private static native boolean nativeVerifyInstalledBasePinned(
+        java.lang.String,
+        java.lang.String
+    );
+    private static native boolean nativeVerifyCertificatesPinned(
+        byte[][],
+        java.lang.String
+    );
+}
+-keepnames class com.pubgm.security.ProductionSignerGuard
+
 # Native wrapper policy uses an exact JNI symbol as well.
 -keep class com.pubgm.security.WrapperPayloadGuard {
     private static native boolean verifyArchiveAndRuntimeNative(
