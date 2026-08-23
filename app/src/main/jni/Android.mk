@@ -4,7 +4,7 @@ include $(CLEAR_VARS)
 
 LOCAL_MODULE := client
 
-LOCAL_SRC_FILES := Main.cpp SignatureIntegrity.cpp
+LOCAL_SRC_FILES := Main.cpp SignatureIntegrity.cpp WrapperPayloadGuard.cpp
 
 # Only current folder include
 LOCAL_C_INCLUDES := $(LOCAL_PATH)

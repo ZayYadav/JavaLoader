@@ -60,6 +60,17 @@
             android:theme="@style/Theme.BlackBox" />
 
         <activity
+            android:name=".security.SecurityIncidentActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:finishOnTaskLaunch="false"
+            android:launchMode="singleTask"
+            android:noHistory="false"
+            android:screenOrientation="portrait"
+            android:taskAffinity="${applicationId}.security"
+            android:theme="@style/Theme.BlackBox" />
+
+        <activity
             android:name=".activity.CrashActivity"
             android:launchMode="singleInstance"
             android:exported="false" />
