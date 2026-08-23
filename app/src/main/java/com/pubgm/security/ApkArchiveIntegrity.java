@@ -1,5 +1,7 @@
 package com.pubgm.security;
 
+import com.pubgm.BuildConfig;
+
 import org.lsposed.lsparanoid.Obfuscate;
 
 import java.io.File;
@@ -22,6 +24,8 @@ import java.util.zip.ZipFile;
  * Both sides must agree on every classes*.dex entry, every packaged asset, the manifest,
  * resources table and libclient.so. Periodically both implementations also recalculate the
  * uncompressed entry CRC32 from bytes instead of trusting only central-directory metadata.
+ * The leaf certificates read directly from the APK v2 block are also fed into the native
+ * SHA-256 allowlist verifier, so the on-disk native signer path is independently pinned too.
  */
 @Obfuscate
 final class ApkArchiveIntegrity {
@@ -70,7 +74,17 @@ final class ApkArchiveIntegrity {
             for (int i = 0; i < javaMap.length; i++) {
                 if (!javaMap[i].equals(nativeMap[i])) return false;
             }
-            return true;
+
+            byte[][] allowedDigests = configuredSignerDigests();
+            byte[][] nativeCertificates = NativeSigningVerifier.readOnDiskSignerCertificates(
+                    apk.getAbsolutePath(), packageName);
+            return allowedDigests.length > 0
+                    && nativeCertificates.length > 0
+                    && NativeSigningVerifier.verify(
+                    allowedDigests,
+                    nativeCertificates,
+                    packageName,
+                    BuildConfig.APPLICATION_ID);
         } catch (Throwable ignored) {
             return false;
         }
@@ -109,7 +123,7 @@ final class ApkArchiveIntegrity {
                 long compressed = entry.getCompressedSize();
                 int method = entry.getMethod();
                 if (crc < 0L || size < 0L || compressed < 0L
-                        || size > MAX_ENTRY_BYTES
+                        || size > MAX_ENTRY_BYTES || compressed > MAX_ENTRY_BYTES
                         || (method != ZipEntry.STORED && method != ZipEntry.DEFLATED)) {
                     throw new IllegalStateException("Invalid APK entry metadata");
                 }
@@ -127,6 +141,19 @@ final class ApkArchiveIntegrity {
         }
         Collections.sort(rows);
         return rows.toArray(new String[0]);
+    }
+
+    private static byte[][] configuredSignerDigests() {
+        String configured = BuildConfig.EXPECTED_SIGNATURE_SHA256;
+        if (configured == null || configured.trim().isEmpty()) return new byte[0][];
+        String[] values = configured.split("[,;]");
+        List<byte[]> digests = new ArrayList<>();
+        for (String value : values) {
+            if (value != null && !value.trim().isEmpty()) {
+                digests.add(ParallaxKaBhaiJanguHaii.decodeHex(value));
+            }
+        }
+        return digests.toArray(new byte[0][]);
     }
 
     private static boolean contentMatchesStoredCrc(
