@@ -1,0 +1,47 @@
+[
+  {
+    "imageIndex": 0,
+    "title": "PUBG INDIA",
+    "version": "Version: 3.5.0",
+    "status": "Safe",
+    "package": "com.pubg.imobile",
+    "genre": "Action",
+    "region": "INDIA"
+  },
+  {
+    "imageIndex": 1,
+    "title": "PUBG GLOBAL",
+    "version": "Version: 3.5.0",
+    "status": "Safe",
+    "package": "com.tencent.ig",
+    "genre": "Action",
+    "region": "GLOBAL"
+  },
+  {
+    "imageIndex": 2,
+    "title": "PUBG KOREA",
+    "version": "Version: 3.5.0",
+    "status": "Safe",
+    "package": "com.pubg.krmobile",
+    "genre": "Action",
+    "region": "KOREA"
+  },
+  {
+    "imageIndex": 3,
+    "title": "PUBG VIETNAM",
+    "version": "Version: 3.5.0",
+    "status": "Safe",
+    "package": "com.vng.pubgmobile",
+    "genre": "Action",
+    "region": "VIETNAM"
+  },
+  {
+    "imageIndex": 4,
+    "title": "PUBG TAIWAN",
+    "version": "Version: 3.5.0",
+    "status": "Safe",
+    "package": "com.rekoo.pubgm",
+    "genre": "Action",
+    "region": "TAIWAN"
+  }
+]

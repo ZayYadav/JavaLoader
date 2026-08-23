@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Main White Glass Background -->
+    <item>
+        <shape>
+            <solid android:color="#F2FFFFFF" />
+            <corners android:radius="28dp" />
+            <stroke
+                android:width="1.5dp"
+                android:color="#33000000" />
+        </shape>
+    </item>
+
+    <!-- Decorative Bubble 1 (Purple) -->
+    <item android:width="80dp" android:height="80dp" android:top="-20dp" android:left="-20dp">
+        <shape android:shape="oval">
+            <gradient
+                android:startColor="#4DA855F7"
+                android:endColor="#00A855F7"
+                android:gradientRadius="40dp"
+                android:type="radial" />
+        </shape>
+    </item>
+
+    <!-- Decorative Bubble 2 (Pink) -->
+    <item android:width="100dp" android:height="100dp" android:bottom="-30dp" android:right="-30dp">
+        <shape android:shape="oval">
+            <gradient
+                android:startColor="#4DEC4899"
+                android:endColor="#00EC4899"
+                android:gradientRadius="50dp"
+                android:type="radial" />
+        </shape>
+    </item>
+
+    <!-- Decorative Bubble 3 (Blue) -->
+    <item android:width="60dp" android:height="60dp" android:top="100dp" android:right="-10dp">
+        <shape android:shape="oval">
+            <gradient
+                android:startColor="#4D3B82F6"
+                android:endColor="#003B82F6"
+                android:gradientRadius="30dp"
+                android:type="radial" />
+        </shape>
+    </item>
+
+    <!-- Top Accent Line -->
+    <item android:height="4dp" android:gravity="top">
+        <shape>
+            <gradient
+                android:startColor="#EC4899"
+                android:centerColor="#A855F7"
+                android:endColor="#3B82F6"
+                android:angle="0" />
+            <corners android:topLeftRadius="28dp" android:topRightRadius="28dp" />
+        </shape>
+    </item>
+</layer-list>

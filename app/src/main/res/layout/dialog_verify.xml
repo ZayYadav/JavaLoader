@@ -1,0 +1,232 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+     xmlns:android="http://schemas.android.com/apk/res/android"
+     android:layout_height="220dp"
+     android:layout_width="180dp"
+     android:background="@drawable/dialog_background"
+     android:gravity="center"
+     android:padding="12dp"
+     android:orientation="vertical"
+     android:layout_gravity="center">
+
+    <LinearLayout
+         android:layout_height="wrap_content"
+         android:layout_width="wrap_content"
+         android:layout_marginBottom="12dp"
+         android:gravity="center"
+         android:orientation="vertical">
+
+        <TextView
+             android:layout_height="wrap_content"
+             android:layout_width="wrap_content"
+             android:textSize="16sp"
+             android:textAllCaps="true"
+             android:textColor="#4CAF50"
+             android:letterSpacing="0.1"
+             android:id="@+id/tvTitle"
+             android:text="VERIFICATION"
+             android:textStyle="bold" />
+
+        <TextView
+             android:layout_height="wrap_content"
+             android:layout_width="wrap_content"
+             android:textSize="10sp"
+             android:textColor="#888888"
+             android:layout_marginTop="3dp"
+             android:id="@+id/tvSubtitle"
+             android:text="Premium Access Required" />
+
+    </LinearLayout>
+
+    <LinearLayout
+         android:layout_height="4dp"
+         android:layout_width="match_parent"
+         android:layout_marginVertical="10dp"
+         android:background="#222222"
+         android:orientation="horizontal"
+         android:id="@+id/progressContainer">
+
+        <View
+             android:layout_height="match_parent"
+             android:layout_width="0dp"
+             android:background="@drawable/progress_gradient"
+             android:id="@+id/progressBar" />
+
+    </LinearLayout>
+
+    <LinearLayout
+         android:layout_height="wrap_content"
+         android:layout_width="match_parent"
+         android:layout_marginVertical="10dp"
+         android:gravity="center"
+         android:orientation="vertical"
+         android:id="@+id/statusContainer">
+
+        <TextView
+             android:layout_height="wrap_content"
+             android:layout_width="wrap_content"
+             android:layout_marginBottom="5dp"
+             android:textSize="12sp"
+             android:textColor="#FFFFFF"
+             android:id="@+id/tvStatusText"
+             android:text="Initializing..."
+             android:textStyle="bold" />
+
+        <TextView
+             android:layout_height="wrap_content"
+             android:layout_width="wrap_content"
+             android:textSize="10sp"
+             android:textColor="#888888"
+             android:id="@+id/tvStatusDetail"
+             android:text="Please wait" />
+
+    </LinearLayout>
+
+    <LinearLayout
+         android:layout_height="wrap_content"
+         android:layout_width="match_parent"
+         android:layout_marginVertical="8dp"
+         android:background="#111111"
+         android:padding="8dp"
+         android:orientation="vertical"
+         android:id="@+id/deviceInfoContainer">
+
+        <TextView
+             android:layout_height="wrap_content"
+             android:layout_width="wrap_content"
+             android:textSize="9sp"
+             android:textColor="#888888"
+             android:id="@+id/tvDeviceInfo"
+             android:text="Device: Loading..." />
+
+        <TextView
+             android:layout_height="wrap_content"
+             android:layout_width="wrap_content"
+             android:textSize="9sp"
+             android:textColor="#888888"
+             android:layout_marginTop="3dp"
+             android:id="@+id/tvAndroidInfo"
+             android:text="Android: Loading..." />
+
+        <TextView
+             android:layout_height="wrap_content"
+             android:layout_width="wrap_content"
+             android:textSize="9sp"
+             android:textColor="#888888"
+             android:layout_marginTop="3dp"
+             android:id="@+id/tvSDKInfo"
+             android:text="SDK: Loading..." />
+
+    </LinearLayout>
+
+    <LinearLayout
+         android:layout_height="wrap_content"
+         android:layout_width="match_parent"
+         android:layout_marginVertical="10dp"
+         android:background="#111111"
+         android:gravity="center"
+         android:padding="8dp"
+         android:orientation="vertical"
+         android:id="@+id/keyContainer">
+
+        <TextView
+             android:layout_height="wrap_content"
+             android:layout_width="wrap_content"
+             android:layout_marginBottom="3dp"
+             android:textSize="9sp"
+             android:textColor="#888888"
+             android:id="@+id/tvKeyLabel"
+             android:text="LICENCE KEY" />
+
+        <TextView
+             android:layout_height="wrap_content"
+             android:layout_width="match_parent"
+             android:gravity="center"
+             android:textSize="10sp"
+             android:fontFamily="monospace"
+             android:textColor="#4CAF50"
+             android:id="@+id/tvKeyText"
+             android:text="Checking..."
+             android:textStyle="bold" />
+
+    </LinearLayout>
+
+    <LinearLayout
+         android:layout_height="wrap_content"
+         android:layout_width="match_parent"
+         android:visibility="gone"
+         android:gravity="center"
+         android:orientation="vertical"
+         android:id="@+id/successScreen">
+
+        <TextView
+             android:layout_height="wrap_content"
+             android:layout_width="wrap_content"
+             android:layout_marginBottom="10dp"
+             android:textSize="28sp"
+             android:textColor="#4CAF50"
+             android:text="✓" />
+
+        <TextView
+             android:layout_height="wrap_content"
+             android:layout_width="wrap_content"
+             android:layout_marginBottom="8dp"
+             android:textSize="12sp"
+             android:textColor="#4CAF50"
+             android:text="ACCESS GRANTED"
+             android:textStyle="bold" />
+
+        <TextView
+             android:layout_height="wrap_content"
+             android:layout_width="wrap_content"
+             android:textSize="10sp"
+             android:textColor="#888888"
+             android:text="Launching application..." />
+
+    </LinearLayout>
+
+    <LinearLayout
+         android:layout_height="wrap_content"
+         android:layout_width="match_parent"
+         android:visibility="gone"
+         android:gravity="center"
+         android:orientation="vertical"
+         android:id="@+id/errorScreen">
+
+        <TextView
+             android:layout_height="wrap_content"
+             android:layout_width="wrap_content"
+             android:layout_marginBottom="10dp"
+             android:textSize="28sp"
+             android:textColor="#F44336"
+             android:text="✗" />
+
+        <TextView
+             android:layout_height="wrap_content"
+             android:layout_width="wrap_content"
+             android:layout_marginBottom="8dp"
+             android:textSize="12sp"
+             android:textColor="#F44336"
+             android:id="@+id/tvErrorMessage"
+             android:text="INVALID LICENCE"
+             android:textStyle="bold" />
+
+        <TextView
+             android:layout_height="wrap_content"
+             android:layout_width="wrap_content"
+             android:textSize="10sp"
+             android:textColor="#888888"
+             android:text="Redirecting to login..." />
+
+    </LinearLayout>
+
+    <TextView
+         android:layout_height="wrap_content"
+         android:layout_width="wrap_content"
+         android:textSize="9sp"
+         android:textColor="#666666"
+         android:layout_marginTop="12dp"
+         android:text="© 2026 Services"
+         android:layout_gravity="center" />
+
+</LinearLayout>

@@ -1,0 +1,44 @@
+// Top-level build file
+buildscript {
+    repositories {
+        mavenLocal ()
+        mavenCentral()
+        maven { url 'https://maven.google.com' }
+        maven { url 'https://central.sonatype.com/repository/maven-snapshots/' }
+        maven { url 'https://jitpack.io' }
+    }
+
+    dependencies {
+        classpath "com.android.tools.build:gradle:8.2.1"
+        classpath 'org.lsposed.lsparanoid:gradle-plugin:0.5.2'
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.22"
+    }
+}
+
+allprojects {
+    repositories {
+        //jcenter()
+        mavenLocal ()
+        mavenCentral()
+        // Do not use google()
+        maven { url 'https://maven.google.com' }
+        maven { url 'https://central.sonatype.com/repository/maven-snapshots/' }
+        maven { url 'https://jitpack.io' }
+    }
+}
+
+tasks.register("clean", Delete) {
+    delete rootProject.buildDir
+}
+
+ext {
+    minSdk = 24
+    ndkVersion = '24.0.8215888'
+    compileSdk = 34
+    buildTools = '34.0.0'
+    targetSdk = 28
+    versionName = '1.0'
+    versionCode = 1
+    group = 'com.elite.reflection'
+    version = '1.0.0'
+}

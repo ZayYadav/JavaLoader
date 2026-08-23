@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- ================= PREMIUM BRAND (RED & BLACK THEME) ================= -->
+    <color name="primary">#FFFF0000</color>
+    <color name="primary_dark">#FF880000</color>
+    <color name="primary_light">#FFFF5555</color>
+
+    <color name="secondary">#FF1A1A1A</color>
+    <color name="secondary_dark">#FF000000</color>
+    <color name="secondary_light">#FF333333</color>
+
+    <color name="accent">#FFFF0000</color>
+    <color name="accent_dark">#FFCC0000</color>
+    <color name="accent_light">#FFFF6666</color>
+    <color name="terminal_text_color">#FFFF0000</color>
+
+    <!-- ================= GLASSMORPHISM (DARK RED VIBE) ================= -->
+    <color name="glass_surface">#CC000000</color>
+    <color name="glass_border">#33FF0000</color>
+    <color name="glass_highlight">#1AFF0000</color>
+    <color name="glass_shadow">#B3000000</color>
+
+    <!-- ================= BACKGROUND ================= -->
+    <color name="window_bg">#FF050505</color>
+    <color name="background">#FF050505</color>
+    <color name="background_alt">#FF101010</color>
+    <color name="card_bg">#FF151515</color>
+    <color name="divider">#1AFF0000</color>
+
+    <!-- ================= TEXT ================= -->
+    <color name="primary_text">#FFFFFFFF</color>
+    <color name="secondary_text">#FFBDBDBD</color>
+    <color name="disabled_text">#FF444444</color>
+
+    <color name="text_primary">#FFFFFFFF</color>
+    <color name="text_secondary">#FFBDBDBD</color>
+    <color name="text_disabled">#FF444444</color>
+
+    <!-- ================= BUTTON ================= -->
+    <color name="button">#FFFF0000</color>
+    <color name="button_pressed">#FFCC0000</color>
+    <color name="button_disabled">#FF222222</color>
+
+    <!-- ================= STATUS ================= -->
+    <color name="success">#FF00FF00</color>
+    <color name="error">#FFFF0000</color>
+    <color name="warning">#FFFFD700</color>
+    <color name="info">#FF00BFFF</color>
+
+    <!-- ================= BASIC ================= -->
+    <color name="white">#FFFFFFFF</color>
+    <color name="black">#FF000000</color>
+    <color name="blue">#3A6FBD</color>
+    <color name="blue2">#FF198DFA</color>
+    <color name="transparent">#00000000</color>
+    <color name="semi_transparent">#80000000</color>
+    
+    <!-- ================= PREMIUM VIBE ================= -->
+    <color name="premium_purple">#A855F7</color>
+    <color name="premium_pink">#EC4899</color>
+    <color name="premium_blue">#3B82F6</color>
+    <color name="premium_dark">#0F172A</color>
+    <color name="premium_glass">#33FFFFFF</color>
+    <color name="premium_red">#EF4444</color>
+    <color name="premium_slate">#64748B</color>
+    <color name="premium_red_light">#1AEF4444</color>
+    <color name="premium_slate_light">#1A64748B</color>
+
+    <color name="pink">#EC4899</color>
+
+    <color name="gray">#888888</color>
+    <color name="red">#FF0000</color>
+    <color name="yellow">#FFEB3B</color>
+    <color name="green_dark">#1B5E20</color>
+
+</resources>

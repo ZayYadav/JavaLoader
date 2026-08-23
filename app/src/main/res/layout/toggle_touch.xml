@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout
+     xmlns:android="http://schemas.android.com/apk/res/android"
+     xmlns:tools="http://schemas.android.com/tools"
+     android:layout_height="wrap_content"
+     android:layout_width="wrap_content">
+
+    <RelativeLayout
+         android:layout_height="wrap_content"
+         android:layout_width="wrap_content"
+         android:id="@+id/layout_icon_control_aim">
+
+        <RelativeLayout
+             android:layout_height="wrap_content"
+             android:layout_width="wrap_content"
+             android:layout_centerInParent="true"
+             android:id="@+id/miniFloatMenu">
+
+            <ImageView
+                 android:layout_height="40dp"
+                 android:layout_width="40dp"
+                 android:layout_centerInParent="true"
+                 android:src="@drawable/imo"
+                 android:id="@+id/imageview_aim" />
+
+        </RelativeLayout>
+
+    </RelativeLayout>
+
+</FrameLayout>

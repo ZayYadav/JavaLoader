@@ -1,0 +1,51 @@
+{
+  "vehicles": [
+    "Buggy", "UAZ", "Trike", "Bike", "Dacia", "Jet", "Boat", "Scooter",
+    "Bus", "Mirado", "Rony", "Snowbike", "Snowmobile", "Tempo", "Truck",
+    "MonsterTruck", "BRDM", "LadaNiva", "ATV", "UTV", "CoupeRB", "Motorglider"
+  ],
+  
+  "weapons": [
+    "AWM", "M416", "AKM", "SCAR-L", "M762", "UZI", "Vector", "S12K", "DBS",
+    "AUG", "Groza", "Kar98k", "M24", "Mini14", "SKS", "SLR", "QBU", "FAMAS",
+    "Honey Badger", "DP28", "M249", "MG3", "M16A4", "MK47", "G36C", "QBZ",
+    "S686", "S1897", "sawed", "M1014", "NS2000", "TommyGun", "MP5K", "P90",
+    "R1895", "P92", "P18C", "R45", "P1911", "Desert", "Scorpion", "Mosin",
+    "MK12", "AMR", "MK14", "Win94", "VSS"
+  ],
+  
+  "scopes": [
+    "8x", "4x", "6x", "3x", "2x", "Red Dot", "Hollow", "Canted"
+  ],
+  
+  "ammo": [
+    "7.62mm", "5.56mm", "9mm", "45ACP", "300Magnum", "50BMG", "12Guage", "Arrow"
+  ],
+  
+  "attachments": [
+    "Compensator Ar", "Flash Hider Ar", "Suppressor Ar", "Extended QD Ar",
+    "Compensator SMG", "Flash Hider SMG", "Suppressor SMG", "Extended QD SMG",
+    "Compensator Sniper", "Flash Hider Sniper", "Suppressor Sniper", "Extended QD Sniper",
+    "Half Grip", "Vertical Grip", "Angled Grip", "Light Grip", "Thumb Grip", "Laser Sight",
+    "Tactical Stock", "Duckbill", "Bullet Loop", "Quiver CrossBow", "Stock Micro UZI"
+  ],
+  
+  "equipment": [
+    "Bag L1", "Bag L2", "Bag L3", 
+    "Vest L1", "Vest L2", "Vest L3",
+    "Helmet L1", "Helmet L2", "Helmet L3"
+  ],
+  
+  "consumables": [
+    "PainKiller", "Injection", "EnergyDrink", "FirstAid", "Bandage", "MedKit"
+  ],
+  
+  "throwables": [
+    "Grenade", "Smoke", "Molotov", "Stun"
+  ],
+  
+  "special": [
+    "LootBox", "AirDrop", "DropPlane", "FlareGun", "CrossBow", 
+    "Gas Can", "CheekPad", "Crate"
+  ]
+}

@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/root_layout"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginBottom="12dp"
+    app:cardBackgroundColor="#0D000000"
+    app:cardCornerRadius="16dp"
+    app:cardElevation="0dp"
+    app:strokeColor="#1A000000"
+    app:strokeWidth="1dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:padding="12dp">
+
+        <com.google.android.material.imageview.ShapeableImageView
+            android:id="@+id/version_icon"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:padding="4dp"
+            android:src="@drawable/pubg_india"
+            app:shapeAppearanceOverlay="@style/ShapeAppearance.Material3.Corner.Small" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="16dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/version_title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="PUBG INDIA"
+                android:textColor="#1E293B"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/version_pkg"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="com.pubg.imobile"
+                android:textColor="#94A3B8"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <ImageView
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:src="@drawable/arrow_drop_down"
+            android:rotation="-90"
+            app:tint="@color/primary" />
+
+    </LinearLayout>
+</com.google.android.material.card.MaterialCardView>

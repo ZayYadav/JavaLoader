@@ -1,0 +1,465 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+     xmlns:android="http://schemas.android.com/apk/res/android"
+     android:layout_height="match_parent"
+     android:layout_width="match_parent"
+     android:background="@drawable/bg_ready"
+     android:orientation="vertical"
+     android:id="@+id/DrakProfile">
+
+    <LinearLayout
+         android:layout_height="wrap_content"
+         android:layout_width="match_parent"
+         android:padding="16dp"
+         android:id="@+id/topBar">
+
+        <ImageView
+             android:layout_height="24dp"
+             android:layout_width="24dp"
+             android:src="@drawable/ic_arrow_forward"
+             android:rotation="180"
+             android:tint="#6FB7FF"
+             android:id="@+id/backBtn" />
+
+        <TextView
+             android:layout_height="wrap_content"
+             android:layout_width="wrap_content"
+             android:textSize="20sp"
+             android:textColor="#FFFFFF"
+             android:layout_marginStart="16dp"
+             android:text="Profile"
+             android:textStyle="bold" />
+
+    </LinearLayout>
+
+    <ScrollView
+         android:layout_height="match_parent"
+         android:layout_width="match_parent">
+
+        <LinearLayout
+             android:layout_height="wrap_content"
+             android:layout_width="match_parent"
+             android:padding="16dp"
+             android:orientation="vertical">
+
+            <LinearLayout
+                 android:layout_height="wrap_content"
+                 android:layout_width="match_parent"
+                 android:layout_marginBottom="16dp"
+                 android:background="@drawable/bg_uuid"
+                 android:padding="8dp"
+                 android:orientation="vertical">
+
+                <LinearLayout
+                     android:layout_height="wrap_content"
+                     android:layout_width="match_parent"
+                     android:gravity="center_vertical"
+                     android:padding="16dp"
+                     android:orientation="horizontal">
+
+                    <LinearLayout
+                         android:layout_height="wrap_content"
+                         android:layout_width="0dp"
+                         android:orientation="vertical"
+                         android:layout_weight="1">
+
+                        <TextView
+                             android:layout_height="wrap_content"
+                             android:layout_width="wrap_content"
+                             android:textSize="16sp"
+                             android:textColor="#FFFFFF"
+                             android:text="Dark Mode" />
+
+                        <TextView
+                             android:layout_height="wrap_content"
+                             android:layout_width="wrap_content"
+                             android:textSize="12sp"
+                             android:textColor="#808080"
+                             android:text="Switch theme" />
+
+                    </LinearLayout>
+
+                    <Switch
+                         android:layout_height="wrap_content"
+                         android:layout_width="wrap_content"
+                         android:id="@+id/DarkModeSwitch" />
+
+                </LinearLayout>
+
+            </LinearLayout>
+
+            <TextView
+                 android:layout_height="wrap_content"
+                 android:layout_width="wrap_content"
+                 android:layout_marginBottom="8dp"
+                 android:textSize="12sp"
+                 android:textColor="#6FB7FF"
+                 android:layout_marginStart="4dp"
+                 android:text="SETTINGS" />
+
+            <LinearLayout
+                 android:layout_height="wrap_content"
+                 android:layout_width="match_parent"
+                 android:background="@drawable/bg_uuid"
+                 android:padding="8dp"
+                 android:orientation="vertical"
+                 android:id="@+id/settingsCard">
+
+                <LinearLayout
+                     android:layout_height="wrap_content"
+                     android:layout_width="match_parent"
+                     android:gravity="center_vertical"
+                     android:padding="16dp"
+                     android:orientation="horizontal">
+
+                    <LinearLayout
+                         android:layout_height="wrap_content"
+                         android:layout_width="0dp"
+                         android:orientation="vertical"
+                         android:layout_weight="1">
+
+                        <TextView
+                             android:layout_height="wrap_content"
+                             android:layout_width="wrap_content"
+                             android:textSize="16sp"
+                             android:textColor="#FFFFFF"
+                             android:text="Hide Root" />
+
+                        <TextView
+                             android:layout_height="wrap_content"
+                             android:layout_width="wrap_content"
+                             android:textSize="12sp"
+                             android:textColor="#808080"
+                             android:text="Hide root access" />
+
+                    </LinearLayout>
+
+                    <Switch
+                         android:layout_height="wrap_content"
+                         android:layout_width="wrap_content"
+                         android:id="@+id/HideRoot" />
+
+                </LinearLayout>
+
+                <View
+                     android:layout_height="1dp"
+                     android:layout_width="match_parent"
+                     android:background="#1F293A" />
+
+                <LinearLayout
+                     android:layout_height="wrap_content"
+                     android:layout_width="match_parent"
+                     android:gravity="center_vertical"
+                     android:padding="16dp"
+                     android:orientation="horizontal">
+
+                    <LinearLayout
+                         android:layout_height="wrap_content"
+                         android:layout_width="0dp"
+                         android:orientation="vertical"
+                         android:layout_weight="1">
+
+                        <TextView
+                             android:layout_height="wrap_content"
+                             android:layout_width="wrap_content"
+                             android:textSize="16sp"
+                             android:textColor="#FFFFFF"
+                             android:text="Hide Xposed" />
+
+                        <TextView
+                             android:layout_height="wrap_content"
+                             android:layout_width="wrap_content"
+                             android:textSize="12sp"
+                             android:textColor="#808080"
+                             android:text="Hide Xposed framework" />
+
+                    </LinearLayout>
+
+                    <Switch
+                         android:layout_height="wrap_content"
+                         android:layout_width="wrap_content"
+                         android:id="@+id/HideXposed" />
+
+                </LinearLayout>
+
+                <View
+                     android:layout_height="1dp"
+                     android:layout_width="match_parent"
+                     android:background="#1F293A" />
+
+                <LinearLayout
+                     android:layout_height="wrap_content"
+                     android:layout_width="match_parent"
+                     android:gravity="center_vertical"
+                     android:padding="16dp"
+                     android:orientation="horizontal">
+
+                    <LinearLayout
+                         android:layout_height="wrap_content"
+                         android:layout_width="0dp"
+                         android:orientation="vertical"
+                         android:layout_weight="1">
+
+                        <TextView
+                             android:layout_height="wrap_content"
+                             android:layout_width="wrap_content"
+                             android:textSize="16sp"
+                             android:textColor="#FFFFFF"
+                             android:text="Daemon" />
+
+                        <TextView
+                             android:layout_height="wrap_content"
+                             android:layout_width="wrap_content"
+                             android:textSize="12sp"
+                             android:textColor="#808080"
+                             android:text="Background service" />
+
+                    </LinearLayout>
+
+                    <Switch
+                         android:layout_height="wrap_content"
+                         android:layout_width="wrap_content"
+                         android:id="@+id/Daemon" />
+
+                </LinearLayout>
+
+                <View
+                     android:layout_height="1dp"
+                     android:layout_width="match_parent"
+                     android:background="#1F293A" />
+
+                <LinearLayout
+                     android:layout_height="wrap_content"
+                     android:layout_width="match_parent"
+                     android:gravity="center_vertical"
+                     android:padding="16dp"
+                     android:orientation="horizontal">
+
+                    <LinearLayout
+                         android:layout_height="wrap_content"
+                         android:layout_width="0dp"
+                         android:orientation="vertical"
+                         android:layout_weight="1">
+
+                        <TextView
+                             android:layout_height="wrap_content"
+                             android:layout_width="wrap_content"
+                             android:textSize="16sp"
+                             android:textColor="#FFFFFF"
+                             android:text="Hide Recording" />
+
+                        <TextView
+                             android:layout_height="wrap_content"
+                             android:layout_width="wrap_content"
+                             android:textSize="12sp"
+                             android:textColor="#808080"
+                             android:text="Prevent recording detection" />
+
+                    </LinearLayout>
+
+                    <Switch
+                         android:layout_height="wrap_content"
+                         android:layout_width="wrap_content"
+                         android:id="@+id/HideRecording" />
+
+                </LinearLayout>
+
+            </LinearLayout>
+
+            <TextView
+                 android:layout_height="wrap_content"
+                 android:layout_width="wrap_content"
+                 android:layout_marginBottom="8dp"
+                 android:textSize="12sp"
+                 android:textColor="#6FB7FF"
+                 android:layout_marginTop="16dp"
+                 android:layout_marginStart="4dp"
+                 android:text="FPS CONTROLLER" />
+
+            <LinearLayout
+                 android:layout_height="wrap_content"
+                 android:layout_width="match_parent"
+                 android:layout_marginBottom="16dp"
+                 android:background="@drawable/bg_uuid"
+                 android:padding="8dp"
+                 android:orientation="vertical"
+                 android:id="@+id/fpsContainer">
+
+                <LinearLayout
+                     android:layout_height="wrap_content"
+                     android:layout_width="match_parent"
+                     android:gravity="center_vertical"
+                     android:background="#332299FF"
+                     android:padding="16dp"
+                     android:orientation="horizontal">
+
+                    <LinearLayout
+                         android:layout_height="wrap_content"
+                         android:layout_width="0dp"
+                         android:orientation="vertical"
+                         android:layout_weight="1">
+
+                        <TextView
+                             android:layout_height="wrap_content"
+                             android:layout_width="wrap_content"
+                             android:textSize="16sp"
+                             android:textColor="#FFFFFF"
+                             android:text="ESP REFRESH RATE" />
+
+                        <TextView
+                             android:layout_height="wrap_content"
+                             android:layout_width="wrap_content"
+                             android:textSize="12sp"
+                             android:textColor="#808080"
+                             android:text="Select FPS for ESP rendering" />
+
+                    </LinearLayout>
+
+                </LinearLayout>
+
+                <View
+                     android:layout_height="1dp"
+                     android:layout_width="match_parent"
+                     android:background="#1F293A" />
+
+                <LinearLayout
+                     android:layout_height="wrap_content"
+                     android:layout_width="match_parent"
+                     android:gravity="center_vertical"
+                     android:padding="16dp"
+                     android:orientation="horizontal">
+
+                    <RadioButton
+                         android:layout_height="wrap_content"
+                         android:layout_width="wrap_content"
+                         android:buttonTint="#4CAF50"
+                         android:id="@+id/fps60" />
+
+                    <LinearLayout
+                         android:layout_height="wrap_content"
+                         android:layout_width="0dp"
+                         android:orientation="vertical"
+                         android:layout_marginStart="12dp"
+                         android:layout_weight="1">
+
+                        <TextView
+                             android:layout_height="wrap_content"
+                             android:layout_width="wrap_content"
+                             android:textSize="16sp"
+                             android:textColor="#FFFFFF"
+                             android:text="60 FPS" />
+
+                        <TextView
+                             android:layout_height="wrap_content"
+                             android:layout_width="wrap_content"
+                             android:textSize="12sp"
+                             android:textColor="#808080"
+                             android:text="Standard - Battery efficient" />
+
+                    </LinearLayout>
+
+                </LinearLayout>
+
+                <View
+                     android:layout_height="1dp"
+                     android:layout_width="match_parent"
+                     android:background="#1F293A" />
+
+                <LinearLayout
+                     android:layout_height="wrap_content"
+                     android:layout_width="match_parent"
+                     android:gravity="center_vertical"
+                     android:padding="16dp"
+                     android:orientation="horizontal">
+
+                    <RadioButton
+                         android:layout_height="wrap_content"
+                         android:layout_width="wrap_content"
+                         android:buttonTint="#2196F3"
+                         android:id="@+id/fps90" />
+
+                    <LinearLayout
+                         android:layout_height="wrap_content"
+                         android:layout_width="0dp"
+                         android:orientation="vertical"
+                         android:layout_marginStart="12dp"
+                         android:layout_weight="1">
+
+                        <TextView
+                             android:layout_height="wrap_content"
+                             android:layout_width="wrap_content"
+                             android:textSize="16sp"
+                             android:textColor="#FFFFFF"
+                             android:text="90 FPS" />
+
+                        <TextView
+                             android:layout_height="wrap_content"
+                             android:layout_width="wrap_content"
+                             android:textSize="12sp"
+                             android:textColor="#808080"
+                             android:text="Smooth - Balanced performance" />
+
+                    </LinearLayout>
+
+                </LinearLayout>
+
+                <View
+                     android:layout_height="1dp"
+                     android:layout_width="match_parent"
+                     android:background="#1F293A" />
+
+                <LinearLayout
+                     android:layout_height="wrap_content"
+                     android:layout_width="match_parent"
+                     android:gravity="center_vertical"
+                     android:padding="16dp"
+                     android:orientation="horizontal">
+
+                    <RadioButton
+                         android:layout_height="wrap_content"
+                         android:layout_width="wrap_content"
+                         android:buttonTint="#FF5722"
+                         android:id="@+id/fps120" />
+
+                    <LinearLayout
+                         android:layout_height="wrap_content"
+                         android:layout_width="0dp"
+                         android:orientation="vertical"
+                         android:layout_marginStart="12dp"
+                         android:layout_weight="1">
+
+                        <TextView
+                             android:layout_height="wrap_content"
+                             android:layout_width="wrap_content"
+                             android:textSize="16sp"
+                             android:textColor="#FFFFFF"
+                             android:text="120 FPS" />
+
+                        <TextView
+                             android:layout_height="wrap_content"
+                             android:layout_width="wrap_content"
+                             android:textSize="12sp"
+                             android:textColor="#808080"
+                             android:text="Ultra smooth - High performance" />
+
+                    </LinearLayout>
+
+                </LinearLayout>
+
+                <TextView
+                     android:layout_height="wrap_content"
+                     android:layout_width="match_parent"
+                     android:gravity="center"
+                     android:background="#332299FF"
+                     android:padding="12dp"
+                     android:textSize="12sp"
+                     android:textColor="#FFA500"
+                     android:text="Higher FPS may increase battery consumption and device temperature" />
+
+            </LinearLayout>
+
+        </LinearLayout>
+
+    </ScrollView>
+
+</LinearLayout>
