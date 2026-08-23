@@ -7,6 +7,7 @@ import android.content.pm.PackageManager;
 import android.content.pm.Signature;
 import android.os.Build;
 
+import com.android.apksig.ApkVerifier;
 import com.pubgm.BuildConfig;
 
 import org.lsposed.lsparanoid.Obfuscate;
@@ -14,6 +15,7 @@ import org.lsposed.lsparanoid.Obfuscate;
 import java.io.File;
 import java.io.InputStream;
 import java.security.MessageDigest;
+import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.List;
@@ -106,9 +108,19 @@ public final class AdvancedIntegrityGuard {
             if (!WrapperPayloadGuard.verify(apk.getAbsolutePath(), packageName)) {
                 return result(Status.NATIVE_RUNTIME_POLICY, "NATIVE_PRECHECK");
             }
-            if (!NativeSigningVerifier.verifyOnDiskSigningBlock(
-                    apk.getAbsolutePath(), packageName, allowedDigests)) {
-                return result(Status.NATIVE_SIGNING_BLOCK, "V2_SIGNING_BLOCK_PRECHECK");
+
+            byte[][] apksigCertificates = verifiedApksigCertificates(apk);
+            if (apksigCertificates.length == 0
+                    || !certificatesAllowed(apksigCertificates, allowedDigests)) {
+                return result(Status.BASE_SIGNER_CHAIN, "APKSIG_CERTIFICATES");
+            }
+
+            byte[][] nativeCertificates = NativeSigningVerifier.readOnDiskSignerCertificates(
+                    apk.getAbsolutePath(), packageName);
+            if (nativeCertificates.length == 0
+                    || !certificatesAllowed(nativeCertificates, allowedDigests)
+                    || !sameCertificateDigestSets(nativeCertificates, apksigCertificates)) {
+                return result(Status.NATIVE_SIGNING_BLOCK, "V2_SIGNER_SET_PRECHECK");
             }
 
             ParallaxKaBhaiJanguHaii.Verification signer =
@@ -154,9 +166,12 @@ public final class AdvancedIntegrityGuard {
                     || !WrapperPayloadGuard.verify(apk.getAbsolutePath(), packageName)) {
                 return result(Status.NATIVE_RUNTIME_POLICY, "NATIVE_POSTCHECK");
             }
-            if (!NativeSigningVerifier.verifyOnDiskSigningBlock(
-                    apk.getAbsolutePath(), packageName, allowedDigests)) {
-                return result(Status.NATIVE_SIGNING_BLOCK, "V2_SIGNING_BLOCK_POSTCHECK");
+            byte[][] nativePost = NativeSigningVerifier.readOnDiskSignerCertificates(
+                    apk.getAbsolutePath(), packageName);
+            if (nativePost.length == 0
+                    || !certificatesAllowed(nativePost, allowedDigests)
+                    || !sameCertificateDigestSets(nativePost, apksigCertificates)) {
+                return result(Status.NATIVE_SIGNING_BLOCK, "V2_SIGNER_SET_POSTCHECK");
             }
             return result(Status.VALID, "");
         } catch (Throwable ignored) {
@@ -175,10 +190,14 @@ public final class AdvancedIntegrityGuard {
             if (info == null || info.sourceDir == null || hasUnexpectedSplits(info)) return false;
             File apk = new File(info.sourceDir).getCanonicalFile();
             byte[][] allowedDigests = configuredSignerDigests();
-            return allowedDigests.length > 0
-                    && WrapperPayloadGuard.verify(apk.getAbsolutePath(), packageName)
-                    && NativeSigningVerifier.verifyOnDiskSigningBlock(
-                    apk.getAbsolutePath(), packageName, allowedDigests);
+            if (allowedDigests.length == 0
+                    || !WrapperPayloadGuard.verify(apk.getAbsolutePath(), packageName)) {
+                return false;
+            }
+            byte[][] nativeCertificates = NativeSigningVerifier.readOnDiskSignerCertificates(
+                    apk.getAbsolutePath(), packageName);
+            return nativeCertificates.length > 0
+                    && certificatesAllowed(nativeCertificates, allowedDigests);
         } catch (Throwable ignored) {
             return false;
         }
@@ -193,8 +212,7 @@ public final class AdvancedIntegrityGuard {
         if (installed.sourceDir == null || runtime.sourceDir == null) throw new IllegalStateException();
         File a = new File(installed.sourceDir).getCanonicalFile();
         File b = new File(runtime.sourceDir).getCanonicalFile();
-        if (!a.equals(b)) throw new IllegalStateException();
-        if (!"base.apk".equals(a.getName())) throw new IllegalStateException();
+        if (!a.equals(b) || !"base.apk".equals(a.getName())) throw new IllegalStateException();
         if (installed.publicSourceDir != null
                 && !a.equals(new File(installed.publicSourceDir).getCanonicalFile())) {
             throw new IllegalStateException();
@@ -222,7 +240,7 @@ public final class AdvancedIntegrityGuard {
                 }
                 String name = raw.replace('\\', '/');
                 String lower = name.toLowerCase(Locale.US);
-                if (name.startsWith("/") || lower.contains("../") || lower.contains("..\\")) {
+                if (name.startsWith("/") || lower.contains("../")) {
                     return Status.PACKAGE_OR_SOURCE;
                 }
                 if ("AndroidManifest.xml".equals(name)) manifests++;
@@ -290,6 +308,22 @@ public final class AdvancedIntegrityGuard {
         return false;
     }
 
+    private static byte[][] verifiedApksigCertificates(File apk) throws Exception {
+        ApkVerifier.Result result = new ApkVerifier.Builder(apk)
+                .setMinCheckedPlatformVersion(24)
+                .build()
+                .verify();
+        if (!result.isVerified() || result.getSignerCertificates().isEmpty()) {
+            return new byte[0][];
+        }
+        List<X509Certificate> certificates = result.getSignerCertificates();
+        byte[][] encoded = new byte[certificates.size()][];
+        for (int i = 0; i < certificates.size(); i++) {
+            encoded[i] = certificates.get(i).getEncoded();
+        }
+        return encoded;
+    }
+
     private static byte[][] configuredSignerDigests() {
         String configured = BuildConfig.EXPECTED_SIGNATURE_SHA256;
         if (configured == null || configured.trim().isEmpty()) return new byte[0][];
@@ -299,6 +333,38 @@ public final class AdvancedIntegrityGuard {
             if (value != null && !value.trim().isEmpty()) result.add(decodeHex(value));
         }
         return result.toArray(new byte[0][]);
+    }
+
+    private static boolean certificatesAllowed(byte[][] certificates, byte[][] allowed) throws Exception {
+        if (certificates == null || certificates.length == 0
+                || allowed == null || allowed.length == 0) return false;
+        for (byte[] certificate : certificates) {
+            if (certificate == null || certificate.length == 0
+                    || !digestAllowed(sha256(certificate), allowed)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean sameCertificateDigestSets(byte[][] first, byte[][] second) throws Exception {
+        if (first == null || second == null || first.length == 0 || first.length != second.length) {
+            return false;
+        }
+        boolean[] used = new boolean[second.length];
+        for (byte[] left : first) {
+            byte[] leftDigest = sha256(left);
+            boolean matched = false;
+            for (int i = 0; i < second.length; i++) {
+                if (!used[i] && MessageDigest.isEqual(leftDigest, sha256(second[i]))) {
+                    used[i] = true;
+                    matched = true;
+                    break;
+                }
+            }
+            if (!matched) return false;
+        }
+        return true;
     }
 
     private static boolean packageManagerSignersAllowed(

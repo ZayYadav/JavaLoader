@@ -22,10 +22,9 @@
         java.lang.String,
         java.lang.String
     );
-    private static native boolean verifyApkSigningBlockNative(
+    private static native byte[][] readApkV2SignerCertificatesNative(
         java.lang.String,
-        java.lang.String,
-        byte[][]
+        java.lang.String
     );
 }
 -keepnames class com.pubgm.security.NativeSigningVerifier
