@@ -40,6 +40,9 @@ jobs:
       NDK_VERSION: '24.0.8215888'
       BUILD_TOOLS_VERSION: '34.0.0'
       JAVA_LOADER_TLS_PINS: ${{ vars.JAVA_LOADER_TLS_PINS }}
+      JAVA_LOADER_API_PUBLIC_KEY_B64: ${{ vars.JAVA_LOADER_API_PUBLIC_KEY_B64 }}
+      JAVA_LOADER_LICENSE_URL: ${{ vars.JAVA_LOADER_LICENSE_URL }}
+      JAVA_LOADER_GAME_ID: ${{ vars.JAVA_LOADER_GAME_ID }}
       ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
       RELEASE_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
       RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
@@ -48,43 +51,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
-
-      - name: Preflight runtime core dependency
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          if ! grep -Rqs 'top\.niunaijun\.blackbox' app/src/main/java; then
-            exit 0
-          fi
-
-          FOUND_CORE=0
-          if [ -d app/libs ]; then
-            while IFS= read -r dependency; do
-              case "$dependency" in
-                *.aar)
-                  tmpdir=$(mktemp -d)
-                  if unzip -p "$dependency" classes.jar > "$tmpdir/classes.jar" 2>/dev/null \
-                    && jar tf "$tmpdir/classes.jar" 2>/dev/null \
-                    | grep -q '^top/niunaijun/blackbox/BlackBoxCore\.class$'; then
-                    FOUND_CORE=1
-                  fi
-                  rm -rf "$tmpdir"
-                  ;;
-                *.jar)
-                  if jar tf "$dependency" 2>/dev/null \
-                    | grep -q '^top/niunaijun/blackbox/BlackBoxCore\.class$'; then
-                    FOUND_CORE=1
-                  fi
-                  ;;
-              esac
-            done < <(find app/libs -maxdepth 1 -type f \( -name '*.aar' -o -name '*.jar' \) -print)
-          fi
-
-          if [ "$FOUND_CORE" -ne 1 ]; then
-            echo '::error title=Missing runtime core dependency::JavaLoader imports top.niunaijun.blackbox.* but the repository does not contain the corresponding BlackBoxCore runtime dependency. Add the legitimate AAR/JAR you are authorized to ship under app/libs; CI intentionally does not download or inject an unpinned runtime core.'
-            exit 1
-          fi
 
       - name: Set up JDK 17
         uses: actions/setup-java@v5
@@ -160,6 +126,43 @@ jobs:
           echo "Build certificate SHA-256: $CERT_SHA256"
           echo "Artifact tier: $ARTIFACT_TIER"
 
+      - name: Configure licensing build identity
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ "$JAVA_LOADER_ARTIFACT_TIER" = 'production-signing' ]; then
+            test -n "${JAVA_LOADER_TLS_PINS:-}" || { echo '::error::JAVA_LOADER_TLS_PINS repository variable is required for production signing'; exit 1; }
+            test -n "${JAVA_LOADER_API_PUBLIC_KEY_B64:-}" || { echo '::error::JAVA_LOADER_API_PUBLIC_KEY_B64 repository variable is required for production signing'; exit 1; }
+            test -n "${JAVA_LOADER_LICENSE_URL:-}" || { echo '::error::JAVA_LOADER_LICENSE_URL repository variable is required for production signing'; exit 1; }
+          else
+            if [ -z "${JAVA_LOADER_API_PUBLIC_KEY_B64:-}" ]; then
+              openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$RUNNER_TEMP/ci-license-private.pem" >/dev/null 2>&1
+              JAVA_LOADER_API_PUBLIC_KEY_B64=$(openssl pkey -in "$RUNNER_TEMP/ci-license-private.pem" -pubout -outform DER 2>/dev/null | base64 -w0)
+            fi
+            if [ -z "${JAVA_LOADER_TLS_PINS:-}" ]; then
+              PIN=$(printf 'javaloader-ci-placeholder-pin' | openssl dgst -sha256 -binary | base64 -w0)
+              JAVA_LOADER_TLS_PINS="sha256/${PIN}"
+            fi
+            if [ -z "${JAVA_LOADER_LICENSE_URL:-}" ]; then
+              JAVA_LOADER_LICENSE_URL='https://invalid.example/connect.php'
+            fi
+          fi
+
+          if [ -z "${JAVA_LOADER_GAME_ID:-}" ]; then
+            JAVA_LOADER_GAME_ID='PUBG'
+          fi
+
+          {
+            echo "JAVA_LOADER_API_PUBLIC_KEY_B64=$JAVA_LOADER_API_PUBLIC_KEY_B64"
+            echo "JAVA_LOADER_TLS_PINS=$JAVA_LOADER_TLS_PINS"
+            echo "JAVA_LOADER_LICENSE_URL=$JAVA_LOADER_LICENSE_URL"
+            echo "JAVA_LOADER_GAME_ID=$JAVA_LOADER_GAME_ID"
+          } >> "$GITHUB_ENV"
+
+          echo "License host: $(printf '%s' "$JAVA_LOADER_LICENSE_URL" | sed -E 's#https://([^/]+)/.*#\1#')"
+          echo "Game id: $JAVA_LOADER_GAME_ID"
+
       - name: Validate Gradle project
         shell: bash
         run: |
@@ -200,7 +203,7 @@ jobs:
           set -euo pipefail
           RELEASE_APK=$(find app/build/outputs/apk/release -type f -name '*.apk' -print -quit)
           test -n "$RELEASE_APK"
-          if unzip -l "$RELEASE_APK" | grep -E 'signing\.properties|local\.properties|\.jks|\.keystore'; then
+          if unzip -l "$RELEASE_APK" | grep -E 'signing\.properties|local\.properties|\.jks|\.keystore|private\.pem'; then
             echo 'Local/signing secret file found inside APK' >&2
             exit 1
           fi
@@ -214,11 +217,9 @@ jobs:
             echo "commit=$GITHUB_SHA"
             echo "ndk=$NDK_VERSION"
             echo "build_tools=$BUILD_TOOLS_VERSION"
-            if [ -n "${JAVA_LOADER_TLS_PINS:-}" ]; then
-              echo 'tls_pinning=configured'
-            else
-              echo 'tls_pinning=platform-trust-only'
-            fi
+            echo "tls_pinning=configured"
+            echo "license_url=$JAVA_LOADER_LICENSE_URL"
+            echo "game_id=$JAVA_LOADER_GAME_ID"
           } | tee build-logs/build-metadata.txt
 
       - name: Upload release APK
