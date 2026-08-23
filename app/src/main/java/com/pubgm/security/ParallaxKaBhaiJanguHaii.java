@@ -13,7 +13,7 @@ import com.pubgm.BuildConfig;
 import org.lsposed.lsparanoid.Obfuscate;
 
 import java.io.File;
-import java.nio.charset.StandardCharsets;
+import java.io.IOException;
 import java.security.MessageDigest;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
@@ -26,229 +26,373 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
 /**
- * OneCore-style fail-closed APK/package/signing identity verification.
- * The installed base APK is cryptographically checked with apksig and cross-checked against
- * PackageManager plus the build-pinned certificate SHA-256.
+ * Fail-closed OneCore-style APK signing identity validation.
+ *
+ * The exact installed base APK is process-bound in native code first, then cryptographically
+ * verified with apksig. Its signer certificate set must match the build-pinned SHA-256 identity
+ * in both Java and native code, and PackageManager must independently agree with that signer set.
  */
 @Obfuscate
 public final class ParallaxKaBhaiJanguHaii {
     private static final long MIN_APK_BYTES = 4L * 1024L;
 
+    public enum Status {
+        VALID,
+        CONFIGURATION_MISSING,
+        PACKAGE_IDENTITY_MISMATCH,
+        APK_SOURCE_INVALID,
+        APK_SIGNATURE_INVALID,
+        SIGNER_MISSING,
+        SIGNER_MISMATCH,
+        ARCHIVE_SIGNER_MISMATCH,
+        NATIVE_VERIFICATION_FAILED,
+        VERIFICATION_ERROR
+    }
+
+    public static final class Verification {
+        private final Status status;
+
+        private Verification(Status status) {
+            this.status = status;
+        }
+
+        public boolean isValid() {
+            return status == Status.VALID;
+        }
+
+        public Status status() {
+            return status;
+        }
+    }
+
     private ParallaxKaBhaiJanguHaii() {
     }
 
+    /** Compatibility entry point used by the existing login/license flow. */
     public static boolean verify(Context context) {
-        if (context == null || !BuildConfig.APPLICATION_ID.equals(context.getPackageName())) return false;
+        return verifyDetailed(context).isValid();
+    }
+
+    public static Verification verifyDetailed(Context context) {
+        if (context == null) return result(Status.VERIFICATION_ERROR);
+
         try {
-            byte[][] allowed = configuredSignerDigests();
-            if (allowed.length == 0) return BuildConfig.DEBUG;
-
-            Context app = context.getApplicationContext() == null
-                    ? context : context.getApplicationContext();
-            PackageManager pm = app.getPackageManager();
-            PackageInfo installed = getInstalledPackageInfo(pm, app.getPackageName());
-            if (installed.applicationInfo == null
-                    || !app.getPackageName().equals(installed.packageName)
-                    || !uidOwnsPackage(pm, installed.applicationInfo.uid, app.getPackageName())) {
-                return false;
+            byte[][] allowedDigests = configuredSignerDigests();
+            if (allowedDigests.length == 0) {
+                return result(Status.CONFIGURATION_MISSING);
             }
 
-            ApplicationInfo appInfo = app.getApplicationInfo();
-            if (!BuildConfig.DEBUG && (appInfo.flags & ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
-                return false;
+            Context appContext = context.getApplicationContext();
+            if (appContext == null) appContext = context;
+            String packageName = appContext.getPackageName();
+            if (!BuildConfig.APPLICATION_ID.equals(packageName)) {
+                return result(Status.PACKAGE_IDENTITY_MISMATCH);
             }
-            File apk = canonicalApk(installed.applicationInfo, appInfo);
-            if (!isStructurallyValidApk(apk)) return false;
 
-            byte[][] archiveCertificates = verifyApkAndGetCertificates(apk);
-            if (archiveCertificates.length == 0) return false;
-            byte[][] archiveDigests = sha256Digests(archiveCertificates);
-            if (!matchesAllowedSignerDigests(allowed, archiveDigests)) return false;
+            PackageManager packageManager = appContext.getPackageManager();
+            PackageInfo installedInfo = getInstalledPackageInfo(packageManager, packageName);
+            if (!packageName.equals(installedInfo.packageName)
+                    || installedInfo.applicationInfo == null
+                    || !uidOwnsPackage(packageManager, installedInfo.applicationInfo.uid, packageName)) {
+                return result(Status.PACKAGE_IDENTITY_MISMATCH);
+            }
 
-            Signature[] packageSigners = getActiveSigners(installed);
-            if (packageSigners.length == 0) return false;
-            byte[][] packageDigests = sha256Digests(certificateBytes(packageSigners));
-            return matchesAllowedSignerDigests(allowed, packageDigests)
-                    && sameSignerSets(packageDigests, archiveDigests);
+            File apkFile = canonicalApk(installedInfo.applicationInfo, appContext.getApplicationInfo());
+            if (!isStructurallyValidApk(apkFile)) {
+                return result(Status.APK_SOURCE_INVALID);
+            }
+
+            // Same OneCore ordering: bind the claimed archive to the installation actually executing
+            // libclient.so before accepting any signer metadata.
+            if (!NativeSigningVerifier.verifyInstalledApk(apkFile.getAbsolutePath(), packageName)) {
+                return result(Status.NATIVE_VERIFICATION_FAILED);
+            }
+
+            byte[][] cryptographicCertificates = verifyApkAndGetCertificates(apkFile);
+            if (cryptographicCertificates.length == 0) {
+                return result(Status.APK_SIGNATURE_INVALID);
+            }
+            byte[][] cryptographicDigests = sha256Digests(cryptographicCertificates);
+            if (!matchesAllowedSignerDigests(allowedDigests, cryptographicDigests)) {
+                return result(Status.APK_SIGNATURE_INVALID);
+            }
+
+            // Native digest comparison consumes the certificates returned by apksig rather than
+            // PackageManager signer metadata.
+            if (!NativeSigningVerifier.verify(
+                    allowedDigests,
+                    cryptographicCertificates,
+                    packageName,
+                    BuildConfig.APPLICATION_ID)) {
+                return result(Status.NATIVE_VERIFICATION_FAILED);
+            }
+
+            Signature[] installedSigners = getActiveSigners(installedInfo);
+            if (installedSigners.length == 0) {
+                return result(Status.SIGNER_MISSING);
+            }
+            byte[][] installedDigests = sha256Digests(certificateBytes(installedSigners));
+            if (!matchesAllowedSignerDigests(allowedDigests, installedDigests)) {
+                return result(Status.SIGNER_MISMATCH);
+            }
+            if (!sameSignerSets(installedDigests, cryptographicDigests)) {
+                return result(Status.SIGNER_MISMATCH);
+            }
+
+            // Archive PackageManager parsing is a third cross-check only. apksig remains the
+            // cryptographic authority, matching OneCore's behavior on Android versions that omit
+            // archive signingInfo.
+            try {
+                PackageInfo archiveInfo = getArchivePackageInfo(packageManager, apkFile);
+                if (archiveInfo != null) {
+                    if (archiveInfo.packageName != null && !packageName.equals(archiveInfo.packageName)) {
+                        return result(Status.PACKAGE_IDENTITY_MISMATCH);
+                    }
+                    Signature[] archiveSigners = getActiveSigners(archiveInfo);
+                    if (archiveSigners.length > 0
+                            && !sameSignerSets(
+                            cryptographicDigests,
+                            sha256Digests(certificateBytes(archiveSigners)))) {
+                        return result(Status.ARCHIVE_SIGNER_MISMATCH);
+                    }
+                }
+            } catch (Throwable ignored) {
+                // Deliberately tolerated only because the exact archive already passed apksig.
+            }
+
+            // Close a simple path-swap/TOCTOU window after the expensive archive checks.
+            if (!NativeSigningVerifier.verifyInstalledApk(apkFile.getAbsolutePath(), packageName)) {
+                return result(Status.NATIVE_VERIFICATION_FAILED);
+            }
+
+            return result(Status.VALID);
         } catch (Throwable ignored) {
-            return false;
+            return result(Status.VERIFICATION_ERROR);
         }
     }
 
     public static String currentSigningCertificateSha256(Context context) {
-        if (!verify(context)) return "";
+        Verification verification = verifyDetailed(context);
+        if (!verification.isValid()) {
+            throw new IllegalStateException("APK signing identity is invalid: " + verification.status());
+        }
         try {
-            File apk = new File(context.getApplicationInfo().sourceDir).getCanonicalFile();
-            byte[][] certificates = verifyApkAndGetCertificates(apk);
-            if (certificates.length == 0) return "";
-            return toHex(sha256(certificates[0]));
-        } catch (Exception ignored) {
-            return "";
+            Context appContext = context.getApplicationContext();
+            if (appContext == null) appContext = context;
+            File apkFile = new File(appContext.getApplicationInfo().sourceDir).getCanonicalFile();
+            byte[][] certificates = verifyApkAndGetCertificates(apkFile);
+            if (certificates.length == 0) {
+                throw new IllegalStateException("APK has no cryptographically verified signer");
+            }
+            return encodeHex(sha256(certificates[0]));
+        } catch (Exception exception) {
+            throw new IllegalStateException("Unable to read APK signing certificate", exception);
         }
     }
 
     public static String[] currentSigningCertificateSha256List(Context context) {
-        if (!verify(context)) return new String[0];
+        Verification verification = verifyDetailed(context);
+        if (!verification.isValid()) return new String[0];
         try {
-            File apk = new File(context.getApplicationInfo().sourceDir).getCanonicalFile();
-            byte[][] certificates = verifyApkAndGetCertificates(apk);
+            Context appContext = context.getApplicationContext();
+            if (appContext == null) appContext = context;
+            File apkFile = new File(appContext.getApplicationInfo().sourceDir).getCanonicalFile();
+            byte[][] certificates = verifyApkAndGetCertificates(apkFile);
             byte[][] digests = sha256Digests(certificates);
             String[] result = new String[digests.length];
-            for (int i = 0; i < digests.length; i++) result[i] = toHex(digests[i]);
+            for (int index = 0; index < digests.length; index++) {
+                result[index] = encodeHex(digests[index]);
+            }
             return result;
         } catch (Exception ignored) {
             return new String[0];
         }
     }
 
+    private static Verification result(Status status) {
+        return new Verification(status);
+    }
+
     private static byte[][] configuredSignerDigests() {
-        String configured = normalizeList(BuildConfig.EXPECTED_SIGNATURE_SHA256);
-        if (configured.isEmpty()) return new byte[0][];
-        String[] values = configured.split(",");
-        byte[][] out = new byte[values.length][];
-        for (int i = 0; i < values.length; i++) out[i] = decodeHex(values[i]);
-        return out;
-    }
-
-    private static PackageInfo getInstalledPackageInfo(PackageManager pm, String packageName)
-            throws PackageManager.NameNotFoundException {
-        int flags = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P
-                ? PackageManager.GET_SIGNING_CERTIFICATES : PackageManager.GET_SIGNATURES;
-        return pm.getPackageInfo(packageName, flags);
-    }
-
-    private static Signature[] getActiveSigners(PackageInfo info) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            if (info.signingInfo == null) return new Signature[0];
-            Signature[] signers = info.signingInfo.getApkContentsSigners();
-            return signers == null ? new Signature[0] : signers;
+        String configured = BuildConfig.EXPECTED_SIGNATURE_SHA256;
+        if (configured == null || configured.trim().isEmpty()) return new byte[0][];
+        String[] values = configured.split("[,;]");
+        List<byte[]> digests = new ArrayList<>();
+        for (String value : values) {
+            if (!value.trim().isEmpty()) digests.add(decodeHex(value));
         }
-        @SuppressWarnings("deprecation")
-        Signature[] signers = info.signatures;
-        return signers == null ? new Signature[0] : signers;
+        return digests.toArray(new byte[0][]);
     }
 
-    private static boolean uidOwnsPackage(PackageManager pm, int uid, String packageName) {
-        String[] packages = pm.getPackagesForUid(uid);
+    private static PackageInfo getInstalledPackageInfo(
+            PackageManager packageManager,
+            String packageName) throws PackageManager.NameNotFoundException {
+        int flags = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P
+                ? PackageManager.GET_SIGNING_CERTIFICATES
+                : PackageManager.GET_SIGNATURES;
+        return packageManager.getPackageInfo(packageName, flags);
+    }
+
+    private static PackageInfo getArchivePackageInfo(PackageManager packageManager, File apkFile) {
+        int flags = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P
+                ? PackageManager.GET_SIGNING_CERTIFICATES
+                : PackageManager.GET_SIGNATURES;
+        PackageInfo packageInfo = packageManager.getPackageArchiveInfo(apkFile.getAbsolutePath(), flags);
+        if (packageInfo != null && packageInfo.applicationInfo != null) {
+            packageInfo.applicationInfo.sourceDir = apkFile.getAbsolutePath();
+            packageInfo.applicationInfo.publicSourceDir = apkFile.getAbsolutePath();
+        }
+        return packageInfo;
+    }
+
+    private static File canonicalApk(
+            ApplicationInfo installedInfo,
+            ApplicationInfo contextInfo) throws IOException {
+        if (installedInfo == null || contextInfo == null
+                || installedInfo.sourceDir == null || contextInfo.sourceDir == null) {
+            throw new IOException("APK source path is unavailable");
+        }
+        File installed = new File(installedInfo.sourceDir).getCanonicalFile();
+        File runtime = new File(contextInfo.sourceDir).getCanonicalFile();
+        if (!installed.equals(runtime)) throw new IOException("APK source paths disagree");
+        return installed;
+    }
+
+    private static boolean uidOwnsPackage(
+            PackageManager packageManager,
+            int uid,
+            String packageName) {
+        String[] packages = packageManager.getPackagesForUid(uid);
         if (packages == null) return false;
-        for (String candidate : packages) if (packageName.equals(candidate)) return true;
+        for (String candidate : packages) {
+            if (packageName.equals(candidate)) return true;
+        }
         return false;
     }
 
-    private static File canonicalApk(ApplicationInfo installed, ApplicationInfo runtime) throws Exception {
-        if (installed.sourceDir == null || runtime.sourceDir == null) {
-            throw new IllegalStateException("APK source unavailable");
-        }
-        File left = new File(installed.sourceDir).getCanonicalFile();
-        File right = new File(runtime.sourceDir).getCanonicalFile();
-        if (!left.equals(right)) throw new IllegalStateException("APK source mismatch");
-        return left;
-    }
-
-    private static boolean isStructurallyValidApk(File apk) {
-        if (!apk.isFile() || !apk.canRead() || apk.length() < MIN_APK_BYTES) return false;
-        try (ZipFile zip = new ZipFile(apk)) {
-            ZipEntry manifest = zip.getEntry("AndroidManifest.xml");
-            ZipEntry dex = zip.getEntry("classes.dex");
-            return manifest != null && dex != null;
-        } catch (Exception ignored) {
+    private static boolean isStructurallyValidApk(File apkFile) {
+        if (!apkFile.isFile() || !apkFile.canRead() || apkFile.length() < MIN_APK_BYTES) return false;
+        try (ZipFile zipFile = new ZipFile(apkFile)) {
+            ZipEntry manifest = zipFile.getEntry("AndroidManifest.xml");
+            ZipEntry dex = zipFile.getEntry("classes.dex");
+            return manifest != null && manifest.getSize() != 0L
+                    && dex != null && dex.getSize() != 0L;
+        } catch (IOException ignored) {
             return false;
         }
     }
 
-    private static byte[][] verifyApkAndGetCertificates(File apk) throws Exception {
-        ApkVerifier.Result result = new ApkVerifier.Builder(apk)
+    private static byte[][] verifyApkAndGetCertificates(File apkFile) throws Exception {
+        ApkVerifier.Result verification = new ApkVerifier.Builder(apkFile)
                 .setMinCheckedPlatformVersion(24)
                 .build()
                 .verify();
-        if (!result.isVerified() || result.getSignerCertificates().isEmpty()) return new byte[0][];
-        List<X509Certificate> certificates = result.getSignerCertificates();
+        if (!verification.isVerified() || verification.getSignerCertificates().isEmpty()) {
+            return new byte[0][];
+        }
+        List<X509Certificate> certificates = verification.getSignerCertificates();
         byte[][] encoded = new byte[certificates.size()][];
-        for (int i = 0; i < certificates.size(); i++) encoded[i] = certificates.get(i).getEncoded();
+        for (int index = 0; index < certificates.size(); index++) {
+            encoded[index] = certificates.get(index).getEncoded();
+        }
         return encoded;
     }
 
+    private static Signature[] getActiveSigners(PackageInfo packageInfo) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            if (packageInfo.signingInfo == null) return new Signature[0];
+            Signature[] signers = packageInfo.signingInfo.getApkContentsSigners();
+            return signers == null ? new Signature[0] : signers;
+        }
+        @SuppressWarnings("deprecation")
+        Signature[] signatures = packageInfo.signatures;
+        return signatures == null ? new Signature[0] : signatures;
+    }
+
     private static byte[][] certificateBytes(Signature[] signatures) {
-        byte[][] values = new byte[signatures.length][];
-        for (int i = 0; i < signatures.length; i++) values[i] = signatures[i].toByteArray();
-        return values;
+        byte[][] certificates = new byte[signatures.length][];
+        for (int index = 0; index < signatures.length; index++) {
+            certificates[index] = signatures[index].toByteArray();
+        }
+        return certificates;
     }
 
     private static byte[][] sha256Digests(byte[][] values) throws Exception {
-        byte[][] out = new byte[values.length][];
-        for (int i = 0; i < values.length; i++) out[i] = sha256(values[i]);
-        return out;
+        byte[][] digests = new byte[values.length][];
+        for (int index = 0; index < values.length; index++) digests[index] = sha256(values[index]);
+        return digests;
     }
 
     private static byte[] sha256(byte[] value) throws Exception {
         return MessageDigest.getInstance("SHA-256").digest(value);
     }
 
-    private static boolean matchesAllowedSignerDigests(byte[][] allowed, byte[][] actual) {
-        if (allowed.length == 0 || actual.length == 0) return false;
+    static boolean matchesAllowedSignerDigests(byte[][] allowed, byte[][] actual) {
+        if (allowed == null || allowed.length == 0 || actual == null || actual.length == 0) {
+            return false;
+        }
         for (byte[] actualDigest : actual) {
             boolean found = false;
             for (byte[] allowedDigest : allowed) {
-                if (MessageDigest.isEqual(allowedDigest, actualDigest)) found = true;
+                if (allowedDigest != null && actualDigest != null
+                        && MessageDigest.isEqual(allowedDigest, actualDigest)) {
+                    found = true;
+                }
             }
             if (!found) return false;
         }
         return true;
     }
 
-    private static boolean sameSignerSets(byte[][] first, byte[][] second) {
-        if (first.length == 0 || first.length != second.length) return false;
+    static boolean sameSignerSets(byte[][] first, byte[][] second) {
+        if (first == null || second == null || first.length == 0 || first.length != second.length) {
+            return false;
+        }
         List<byte[]> left = sortedDigests(first);
         List<byte[]> right = sortedDigests(second);
-        for (int i = 0; i < left.size(); i++) {
-            if (!MessageDigest.isEqual(left.get(i), right.get(i))) return false;
+        for (int index = 0; index < left.size(); index++) {
+            if (!MessageDigest.isEqual(left.get(index), right.get(index))) return false;
         }
         return true;
     }
 
-    private static List<byte[]> sortedDigests(byte[][] values) {
-        List<byte[]> out = new ArrayList<>();
-        for (byte[] value : values) out.add(Arrays.copyOf(value, value.length));
-        Collections.sort(out, new Comparator<byte[]>() {
+    private static List<byte[]> sortedDigests(byte[][] digests) {
+        List<byte[]> values = new ArrayList<>();
+        for (byte[] digest : digests) {
+            values.add(digest == null ? new byte[0] : Arrays.copyOf(digest, digest.length));
+        }
+        Collections.sort(values, new Comparator<byte[]>() {
             @Override
             public int compare(byte[] first, byte[] second) {
                 int length = Math.min(first.length, second.length);
-                for (int i = 0; i < length; i++) {
-                    int comparison = Integer.compare(first[i] & 0xff, second[i] & 0xff);
+                for (int index = 0; index < length; index++) {
+                    int comparison = Integer.compare(first[index] & 0xff, second[index] & 0xff);
                     if (comparison != 0) return comparison;
                 }
                 return Integer.compare(first.length, second.length);
             }
         });
-        return out;
+        return values;
     }
 
-    private static String normalizeList(String value) {
-        if (value == null) return "";
-        StringBuilder out = new StringBuilder();
-        for (String part : value.split("[,;]")) {
-            String normalized = part.replace(":", "").trim().toUpperCase(Locale.US);
-            if (!normalized.matches("^[0-9A-F]{64}$")) continue;
-            if (out.length() > 0) out.append(',');
-            out.append(normalized);
+    static byte[] decodeHex(String value) {
+        String normalized = value.replace(":", "").trim().toUpperCase(Locale.US);
+        if (normalized.length() != 64) {
+            throw new IllegalArgumentException("Expected a SHA-256 certificate digest");
         }
-        return out.toString();
-    }
-
-    private static byte[] decodeHex(String value) {
-        byte[] result = new byte[32];
-        for (int i = 0; i < 64; i += 2) {
-            int high = Character.digit(value.charAt(i), 16);
-            int low = Character.digit(value.charAt(i + 1), 16);
-            if (high < 0 || low < 0) throw new IllegalArgumentException("Invalid SHA-256");
-            result[i / 2] = (byte) ((high << 4) | low);
+        byte[] result = new byte[normalized.length() / 2];
+        for (int index = 0; index < normalized.length(); index += 2) {
+            int high = Character.digit(normalized.charAt(index), 16);
+            int low = Character.digit(normalized.charAt(index + 1), 16);
+            if (high < 0 || low < 0) throw new IllegalArgumentException("Invalid certificate digest");
+            result[index / 2] = (byte) ((high << 4) | low);
         }
         return result;
     }
 
-    private static String toHex(byte[] bytes) {
-        StringBuilder out = new StringBuilder(bytes.length * 2);
-        for (byte value : bytes) out.append(String.format(Locale.US, "%02X", value & 0xff));
-        return out.toString();
+    private static String encodeHex(byte[] value) {
+        StringBuilder hex = new StringBuilder(value.length * 2);
+        for (byte item : value) hex.append(String.format(Locale.US, "%02X", item & 0xff));
+        return hex.toString();
     }
 }

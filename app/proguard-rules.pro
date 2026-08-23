@@ -10,6 +10,21 @@
     native <methods>;
 }
 
+# Native signing verifier is resolved through exact conventional JNI names.
+-keep class com.pubgm.security.NativeSigningVerifier {
+    private static native boolean verifySigningIdentity(
+        byte[][],
+        byte[][],
+        java.lang.String,
+        java.lang.String
+    );
+    private static native boolean verifyProcessBoundApkNative(
+        java.lang.String,
+        java.lang.String
+    );
+}
+-keepnames class com.pubgm.security.NativeSigningVerifier
+
 # The shipped native client resolves this compatibility facade by its existing JNI name.
 -keep class com.pubgm.Login { *; }
 
