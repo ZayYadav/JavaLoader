@@ -5,6 +5,37 @@ plugins {
 
 apply from: '../signing.gradle'
 
+def javaLoaderAllowedSigningSha256 = providers.gradleProperty('javaLoaderAllowedSigningSha256')
+        .orElse(System.getenv('JAVA_LOADER_ALLOWED_SIGNING_SHA256') ?: '')
+        .get()
+        .replace(':', '')
+        .trim()
+        .toUpperCase(java.util.Locale.ROOT)
+def javaLoaderTlsPins = providers.gradleProperty('javaLoaderTlsPins')
+        .orElse(System.getenv('JAVA_LOADER_TLS_PINS') ?: '')
+        .get()
+        .trim()
+def javaString = { String value ->
+    '"' + (value ?: '').replace('\\', '\\\\').replace('"', '\\"') + '"'
+}
+def releaseTaskRequested = gradle.startParameter.taskNames.any {
+    it.toLowerCase(java.util.Locale.ROOT).contains('release')
+}
+
+if (!javaLoaderAllowedSigningSha256.isEmpty()
+        && !(javaLoaderAllowedSigningSha256 ==~ /^[0-9A-F]{64}(,[0-9A-F]{64})*$/)) {
+    throw new GradleException('JAVA_LOADER_ALLOWED_SIGNING_SHA256 must contain one or more 64-digit SHA-256 certificate digests')
+}
+if (releaseTaskRequested && javaLoaderAllowedSigningSha256.isEmpty()) {
+    throw new GradleException('JAVA_LOADER_ALLOWED_SIGNING_SHA256 is required for release builds')
+}
+if (!javaLoaderTlsPins.isEmpty()) {
+    def pins = javaLoaderTlsPins.split(',', -1).collect { it.trim() }
+    if (pins.any { !(it ==~ /^sha256\/[A-Za-z0-9+\/]{43}=$/) }) {
+        throw new GradleException('JAVA_LOADER_TLS_PINS must contain comma-separated SHA-256 SPKI pins')
+    }
+}
+
 android {
     namespace "com.pubgm"
     compileSdk rootProject.ext.compileSdk
@@ -22,6 +53,8 @@ android {
         versionCode rootProject.ext.versionCode
         versionName rootProject.ext.versionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField "String", "EXPECTED_SIGNATURE_SHA256", javaString(javaLoaderAllowedSigningSha256)
+        buildConfigField "String", "JAVA_LOADER_TLS_PINS", javaString(javaLoaderTlsPins)
     }
     
     splits {
@@ -70,6 +103,10 @@ android {
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    buildFeatures {
+        buildConfig true
     }
     
     externalNativeBuild {
