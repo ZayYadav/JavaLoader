@@ -25,7 +25,8 @@ final class WrapperPayloadGuard {
         if (!AVAILABLE || apkPath == null || apkPath.isEmpty()
                 || packageName == null || packageName.isEmpty()) return false;
         try {
-            return verifyArchiveAndRuntimeNative(apkPath, packageName);
+            return verifyArchiveAndRuntimeNative(apkPath, packageName)
+                    && ApkArchiveIntegrity.verify(apkPath, packageName);
         } catch (Throwable ignored) {
             return false;
         }

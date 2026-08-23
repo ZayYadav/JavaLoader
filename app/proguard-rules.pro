@@ -38,6 +38,16 @@
 }
 -keepnames class com.pubgm.security.WrapperPayloadGuard
 
+# Java/native ZIP map cross-check. Keep the bridge name stable for conventional JNI lookup.
+-keep class com.pubgm.security.ApkArchiveIntegrity {
+    private static native java.lang.String[] readCriticalArchiveMapNative(
+        java.lang.String,
+        java.lang.String,
+        boolean
+    );
+}
+-keepnames class com.pubgm.security.ApkArchiveIntegrity
+
 # The shipped native client resolves this compatibility facade by its existing JNI name.
 -keep class com.pubgm.Login { *; }
 
