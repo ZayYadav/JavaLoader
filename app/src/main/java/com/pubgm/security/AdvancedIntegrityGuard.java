@@ -4,6 +4,7 @@ import android.content.Context;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
+import android.content.pm.Signature;
 import android.os.Build;
 
 import com.pubgm.BuildConfig;
@@ -11,7 +12,11 @@ import com.pubgm.BuildConfig;
 import org.lsposed.lsparanoid.Obfuscate;
 
 import java.io.File;
+import java.io.InputStream;
+import java.security.MessageDigest;
+import java.util.ArrayList;
 import java.util.Enumeration;
+import java.util.List;
 import java.util.Locale;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
@@ -25,10 +30,13 @@ public final class AdvancedIntegrityGuard {
         VALID,
         PACKAGE_OR_SOURCE,
         DEBUGGABLE_RELEASE,
+        SPLIT_APK_UNEXPECTED,
         NESTED_EXECUTABLE_PAYLOAD,
         NATIVE_RUNTIME_POLICY,
+        NATIVE_SIGNING_BLOCK,
         BASE_SIGNER_CHAIN,
         PACKAGE_MANAGER_SIGNER_API,
+        SIGNING_HISTORY_MISMATCH,
         ERROR
     }
 
@@ -59,6 +67,11 @@ public final class AdvancedIntegrityGuard {
                 return result(Status.PACKAGE_OR_SOURCE, "PACKAGE_ID");
             }
 
+            byte[][] allowedDigests = configuredSignerDigests();
+            if (allowedDigests.length == 0) {
+                return result(Status.BASE_SIGNER_CHAIN, "NO_SIGNER_ALLOWLIST");
+            }
+
             PackageManager pm = app.getPackageManager();
             int flags = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P
                     ? PackageManager.GET_SIGNING_CERTIFICATES : PackageManager.GET_SIGNATURES;
@@ -82,6 +95,9 @@ public final class AdvancedIntegrityGuard {
             if (!BuildConfig.DEBUG && (runtime.flags & ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
                 return result(Status.DEBUGGABLE_RELEASE, "DEBUGGABLE");
             }
+            if (hasUnexpectedSplits(installed.applicationInfo) || hasUnexpectedSplits(runtime)) {
+                return result(Status.SPLIT_APK_UNEXPECTED, "SPLIT_SOURCE_DIRS");
+            }
 
             File apk = canonicalInstalledApk(installed.applicationInfo, runtime);
             Status zipPolicy = inspectArchive(apk);
@@ -90,11 +106,19 @@ public final class AdvancedIntegrityGuard {
             if (!WrapperPayloadGuard.verify(apk.getAbsolutePath(), packageName)) {
                 return result(Status.NATIVE_RUNTIME_POLICY, "NATIVE_PRECHECK");
             }
+            if (!NativeSigningVerifier.verifyOnDiskSigningBlock(
+                    apk.getAbsolutePath(), packageName, allowedDigests)) {
+                return result(Status.NATIVE_SIGNING_BLOCK, "V2_SIGNING_BLOCK_PRECHECK");
+            }
 
             ParallaxKaBhaiJanguHaii.Verification signer =
                     ParallaxKaBhaiJanguHaii.verifyDetailed(app);
             if (!signer.isValid()) {
                 return result(Status.BASE_SIGNER_CHAIN, signer.status().name());
+            }
+
+            if (!packageManagerSignersAllowed(pm, installed, packageName, allowedDigests)) {
+                return result(Status.SIGNING_HISTORY_MISMATCH, "PM_SIGNER_HISTORY");
             }
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
@@ -107,14 +131,32 @@ public final class AdvancedIntegrityGuard {
                             packageName,
                             decodeHex(digest),
                             PackageManager.CERT_INPUT_SHA256)) {
-                        return result(Status.PACKAGE_MANAGER_SIGNER_API, "HAS_SIGNING_CERTIFICATE");
+                        return result(Status.PACKAGE_MANAGER_SIGNER_API, "ACTIVE_SIGNER_API");
                     }
+                }
+
+                boolean expectedKnown = false;
+                for (byte[] allowed : allowedDigests) {
+                    if (allowed != null && allowed.length == 32
+                            && pm.hasSigningCertificate(
+                            packageName,
+                            allowed,
+                            PackageManager.CERT_INPUT_SHA256)) {
+                        expectedKnown = true;
+                    }
+                }
+                if (!expectedKnown) {
+                    return result(Status.PACKAGE_MANAGER_SIGNER_API, "EXPECTED_SIGNER_API");
                 }
             }
 
             if (inspectArchive(apk) != Status.VALID
                     || !WrapperPayloadGuard.verify(apk.getAbsolutePath(), packageName)) {
                 return result(Status.NATIVE_RUNTIME_POLICY, "NATIVE_POSTCHECK");
+            }
+            if (!NativeSigningVerifier.verifyOnDiskSigningBlock(
+                    apk.getAbsolutePath(), packageName, allowedDigests)) {
+                return result(Status.NATIVE_SIGNING_BLOCK, "V2_SIGNING_BLOCK_POSTCHECK");
             }
             return result(Status.VALID, "");
         } catch (Throwable ignored) {
@@ -127,14 +169,23 @@ public final class AdvancedIntegrityGuard {
         try {
             Context app = context.getApplicationContext();
             if (app == null) app = context;
-            if (!BuildConfig.APPLICATION_ID.equals(app.getPackageName())) return false;
+            String packageName = app.getPackageName();
+            if (!BuildConfig.APPLICATION_ID.equals(packageName)) return false;
             ApplicationInfo info = app.getApplicationInfo();
-            if (info == null || info.sourceDir == null) return false;
+            if (info == null || info.sourceDir == null || hasUnexpectedSplits(info)) return false;
             File apk = new File(info.sourceDir).getCanonicalFile();
-            return WrapperPayloadGuard.verify(apk.getAbsolutePath(), app.getPackageName());
+            byte[][] allowedDigests = configuredSignerDigests();
+            return allowedDigests.length > 0
+                    && WrapperPayloadGuard.verify(apk.getAbsolutePath(), packageName)
+                    && NativeSigningVerifier.verifyOnDiskSigningBlock(
+                    apk.getAbsolutePath(), packageName, allowedDigests);
         } catch (Throwable ignored) {
             return false;
         }
+    }
+
+    private static boolean hasUnexpectedSplits(ApplicationInfo info) {
+        return info != null && info.splitSourceDirs != null && info.splitSourceDirs.length > 0;
     }
 
     private static File canonicalInstalledApk(ApplicationInfo installed, ApplicationInfo runtime)
@@ -143,6 +194,7 @@ public final class AdvancedIntegrityGuard {
         File a = new File(installed.sourceDir).getCanonicalFile();
         File b = new File(runtime.sourceDir).getCanonicalFile();
         if (!a.equals(b)) throw new IllegalStateException();
+        if (!"base.apk".equals(a.getName())) throw new IllegalStateException();
         if (installed.publicSourceDir != null
                 && !a.equals(new File(installed.publicSourceDir).getCanonicalFile())) {
             throw new IllegalStateException();
@@ -170,12 +222,15 @@ public final class AdvancedIntegrityGuard {
                 }
                 String name = raw.replace('\\', '/');
                 String lower = name.toLowerCase(Locale.US);
-                if (name.startsWith("/") || lower.contains("../")) {
+                if (name.startsWith("/") || lower.contains("../") || lower.contains("..\\")) {
                     return Status.PACKAGE_OR_SOURCE;
                 }
                 if ("AndroidManifest.xml".equals(name)) manifests++;
                 if ("classes.dex".equals(name)) primaryDex++;
-                if (forbiddenNestedPayload(lower)) return Status.NESTED_EXECUTABLE_PAYLOAD;
+                if (forbiddenNestedPayload(lower)
+                        || hiddenExecutableMagic(zip, entry, lower)) {
+                    return Status.NESTED_EXECUTABLE_PAYLOAD;
+                }
             }
             ZipEntry manifest = zip.getEntry("AndroidManifest.xml");
             ZipEntry dex = zip.getEntry("classes.dex");
@@ -191,13 +246,108 @@ public final class AdvancedIntegrityGuard {
 
     private static boolean forbiddenNestedPayload(String lower) {
         boolean executable = lower.endsWith(".apk") || lower.endsWith(".dex")
-                || lower.endsWith(".jar") || lower.endsWith(".odex") || lower.endsWith(".vdex");
+                || lower.endsWith(".jar") || lower.endsWith(".odex")
+                || lower.endsWith(".vdex") || lower.endsWith(".so")
+                || lower.endsWith(".zip");
         boolean payloadArea = lower.startsWith("assets/") || lower.startsWith("res/raw/");
         boolean obviousWrapper = lower.equals("origin.apk") || lower.endsWith("/origin.apk")
                 || lower.equals("original.apk") || lower.endsWith("/original.apk")
-                || lower.contains("original_app")
-                || lower.equals("backup.apk") || lower.endsWith("/backup.apk");
+                || lower.equals("payload.apk") || lower.endsWith("/payload.apk")
+                || lower.equals("shell.apk") || lower.endsWith("/shell.apk")
+                || lower.equals("target.apk") || lower.endsWith("/target.apk")
+                || lower.equals("backup.apk") || lower.endsWith("/backup.apk")
+                || lower.contains("original_app") || lower.contains("origin_app");
         return obviousWrapper || (payloadArea && executable);
+    }
+
+    private static boolean hiddenExecutableMagic(ZipFile zip, ZipEntry entry, String lower) {
+        if (entry == null || entry.isDirectory()) return false;
+        boolean payloadArea = lower.startsWith("assets/") || lower.startsWith("res/raw/");
+        if (!payloadArea) return false;
+        byte[] header = new byte[8];
+        int count = 0;
+        try (InputStream input = zip.getInputStream(entry)) {
+            while (count < header.length) {
+                int read = input.read(header, count, header.length - count);
+                if (read < 0) break;
+                if (read == 0) continue;
+                count += read;
+            }
+        } catch (Throwable ignored) {
+            return true;
+        }
+        if (count >= 4) {
+            boolean zipMagic = header[0] == 'P' && header[1] == 'K'
+                    && ((header[2] == 3 && header[3] == 4)
+                    || (header[2] == 5 && header[3] == 6)
+                    || (header[2] == 7 && header[3] == 8));
+            boolean dexMagic = header[0] == 'd' && header[1] == 'e'
+                    && header[2] == 'x' && header[3] == '\n';
+            boolean elfMagic = (header[0] & 0xff) == 0x7f
+                    && header[1] == 'E' && header[2] == 'L' && header[3] == 'F';
+            return zipMagic || dexMagic || elfMagic;
+        }
+        return false;
+    }
+
+    private static byte[][] configuredSignerDigests() {
+        String configured = BuildConfig.EXPECTED_SIGNATURE_SHA256;
+        if (configured == null || configured.trim().isEmpty()) return new byte[0][];
+        String[] values = configured.split("[,;]");
+        List<byte[]> result = new ArrayList<>();
+        for (String value : values) {
+            if (value != null && !value.trim().isEmpty()) result.add(decodeHex(value));
+        }
+        return result.toArray(new byte[0][]);
+    }
+
+    private static boolean packageManagerSignersAllowed(
+            PackageManager pm,
+            PackageInfo info,
+            String packageName,
+            byte[][] allowed) throws Exception {
+        if (info == null || allowed == null || allowed.length == 0) return false;
+        Signature[] active;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            if (info.signingInfo == null) return false;
+            active = info.signingInfo.getApkContentsSigners();
+        } else {
+            @SuppressWarnings("deprecation")
+            Signature[] legacy = info.signatures;
+            active = legacy;
+        }
+        if (active == null || active.length == 0) return false;
+        for (Signature signature : active) {
+            if (!digestAllowed(sha256(signature.toByteArray()), allowed)) return false;
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P
+                && info.signingInfo != null
+                && !info.signingInfo.hasMultipleSigners()) {
+            Signature[] history = info.signingInfo.getSigningCertificateHistory();
+            if (history == null || history.length == 0) return false;
+            for (Signature signature : history) {
+                byte[] digest = sha256(signature.toByteArray());
+                if (!digestAllowed(digest, allowed)) return false;
+                if (!pm.hasSigningCertificate(
+                        packageName, digest, PackageManager.CERT_INPUT_SHA256)) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    private static boolean digestAllowed(byte[] digest, byte[][] allowed) {
+        if (digest == null || allowed == null) return false;
+        for (byte[] candidate : allowed) {
+            if (candidate != null && MessageDigest.isEqual(digest, candidate)) return true;
+        }
+        return false;
+    }
+
+    private static byte[] sha256(byte[] value) throws Exception {
+        return MessageDigest.getInstance("SHA-256").digest(value);
     }
 
     private static byte[] decodeHex(String value) {

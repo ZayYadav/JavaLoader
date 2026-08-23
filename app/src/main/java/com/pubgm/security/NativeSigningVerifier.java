@@ -47,6 +47,26 @@ final class NativeSigningVerifier {
         }
     }
 
+    /**
+     * Parses the signer certificate directly from the APK Signature Scheme v2 block in native code.
+     * This is intentionally independent from PackageManager and Java apksig certificate extraction.
+     */
+    static boolean verifyOnDiskSigningBlock(
+            String apkPath,
+            String actualPackage,
+            byte[][] allowedDigests) {
+        if (!AVAILABLE || apkPath == null || apkPath.isEmpty()
+                || actualPackage == null || actualPackage.isEmpty()
+                || allowedDigests == null || allowedDigests.length == 0) {
+            return false;
+        }
+        try {
+            return verifyApkSigningBlockNative(apkPath, actualPackage, allowedDigests);
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
     private static native boolean verifySigningIdentity(
             byte[][] allowedDigests,
             byte[][] certificates,
@@ -56,4 +76,9 @@ final class NativeSigningVerifier {
     private static native boolean verifyProcessBoundApkNative(
             String apkPath,
             String actualPackage);
+
+    private static native boolean verifyApkSigningBlockNative(
+            String apkPath,
+            String actualPackage,
+            byte[][] allowedDigests);
 }

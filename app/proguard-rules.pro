@@ -22,8 +22,22 @@
         java.lang.String,
         java.lang.String
     );
+    private static native boolean verifyApkSigningBlockNative(
+        java.lang.String,
+        java.lang.String,
+        byte[][]
+    );
 }
 -keepnames class com.pubgm.security.NativeSigningVerifier
+
+# Native wrapper policy uses an exact JNI symbol as well.
+-keep class com.pubgm.security.WrapperPayloadGuard {
+    private static native boolean verifyArchiveAndRuntimeNative(
+        java.lang.String,
+        java.lang.String
+    );
+}
+-keepnames class com.pubgm.security.WrapperPayloadGuard
 
 # The shipped native client resolves this compatibility facade by its existing JNI name.
 -keep class com.pubgm.Login { *; }
