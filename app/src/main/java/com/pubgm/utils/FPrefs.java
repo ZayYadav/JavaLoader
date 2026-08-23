@@ -4,7 +4,7 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.preference.PreferenceManager;
 
-import com.pubgm.security.SecurePreferences;
+import com.pubgm.security.ParallaxLoversssHu;
 
 import java.util.Set;
 
@@ -20,19 +20,19 @@ public class FPrefs {
 
     private static FPrefs prefsInstance;
     private final SharedPreferences sharedPreferences;
-    private final SecurePreferences securePreferences;
+    private final ParallaxLoversssHu securePreferences;
 
     private FPrefs(Context context) {
         Context appContext = context.getApplicationContext();
         sharedPreferences = PreferenceManager.getDefaultSharedPreferences(appContext);
-        securePreferences = new SecurePreferences(appContext);
+        securePreferences = new ParallaxLoversssHu(appContext);
         migrateLegacyLicenseKey();
     }
 
     private FPrefs(Context context, String preferencesName) {
         Context appContext = context.getApplicationContext();
         sharedPreferences = appContext.getSharedPreferences(preferencesName, Context.MODE_PRIVATE);
-        securePreferences = new SecurePreferences(appContext);
+        securePreferences = new ParallaxLoversssHu(appContext);
         migrateLegacyLicenseKey();
     }
 
@@ -51,8 +51,7 @@ public class FPrefs {
         return prefsInstance;
     }
 
-    public static FPrefs with(Context context, String preferencesName,
-                             boolean forceInstantiation) {
+    public static FPrefs with(Context context, String preferencesName, boolean forceInstantiation) {
         if (forceInstantiation) prefsInstance = new FPrefs(context, preferencesName);
         return prefsInstance;
     }
@@ -77,17 +76,9 @@ public class FPrefs {
         sharedPreferences.edit().putString(where, what).apply();
     }
 
-    public int readInt(String what) {
-        return sharedPreferences.getInt(what, DEFAULT_INT_VALUE);
-    }
-
-    public int readInt(String what, int defaultInt) {
-        return sharedPreferences.getInt(what, defaultInt);
-    }
-
-    public void writeInt(String where, int what) {
-        sharedPreferences.edit().putInt(where, what).apply();
-    }
+    public int readInt(String what) { return sharedPreferences.getInt(what, DEFAULT_INT_VALUE); }
+    public int readInt(String what, int defaultInt) { return sharedPreferences.getInt(what, defaultInt); }
+    public void writeInt(String where, int what) { sharedPreferences.edit().putInt(where, what).apply(); }
 
     public double readDouble(String what) {
         if (!contains(what)) return DEFAULT_DOUBLE_VALUE;
@@ -99,53 +90,18 @@ public class FPrefs {
         return Double.longBitsToDouble(readLong(what));
     }
 
-    public void writeDouble(String where, double what) {
-        writeLong(where, Double.doubleToRawLongBits(what));
-    }
-
-    public float readFloat(String what) {
-        return sharedPreferences.getFloat(what, DEFAULT_FLOAT_VALUE);
-    }
-
-    public float readFloat(String what, float defaultFloat) {
-        return sharedPreferences.getFloat(what, defaultFloat);
-    }
-
-    public void writeFloat(String where, float what) {
-        sharedPreferences.edit().putFloat(where, what).apply();
-    }
-
-    public long readLong(String what) {
-        return sharedPreferences.getLong(what, DEFAULT_LONG_VALUE);
-    }
-
-    public long readLong(String what, long defaultLong) {
-        return sharedPreferences.getLong(what, defaultLong);
-    }
-
-    public void writeLong(String where, long what) {
-        sharedPreferences.edit().putLong(where, what).apply();
-    }
-
-    public boolean readBoolean(String what) {
-        return readBoolean(what, DEFAULT_BOOLEAN_VALUE);
-    }
-
-    public boolean readBoolean(String what, boolean defaultBoolean) {
-        return sharedPreferences.getBoolean(what, defaultBoolean);
-    }
-
-    public void writeBoolean(String where, boolean what) {
-        sharedPreferences.edit().putBoolean(where, what).apply();
-    }
-
-    public void putStringSet(final String key, final Set<String> value) {
-        sharedPreferences.edit().putStringSet(key, value).apply();
-    }
-
-    public Set<String> getStringSet(final String key, final Set<String> defValue) {
-        return sharedPreferences.getStringSet(key, defValue);
-    }
+    public void writeDouble(String where, double what) { writeLong(where, Double.doubleToRawLongBits(what)); }
+    public float readFloat(String what) { return sharedPreferences.getFloat(what, DEFAULT_FLOAT_VALUE); }
+    public float readFloat(String what, float defaultFloat) { return sharedPreferences.getFloat(what, defaultFloat); }
+    public void writeFloat(String where, float what) { sharedPreferences.edit().putFloat(where, what).apply(); }
+    public long readLong(String what) { return sharedPreferences.getLong(what, DEFAULT_LONG_VALUE); }
+    public long readLong(String what, long defaultLong) { return sharedPreferences.getLong(what, defaultLong); }
+    public void writeLong(String where, long what) { sharedPreferences.edit().putLong(where, what).apply(); }
+    public boolean readBoolean(String what) { return readBoolean(what, DEFAULT_BOOLEAN_VALUE); }
+    public boolean readBoolean(String what, boolean defaultBoolean) { return sharedPreferences.getBoolean(what, defaultBoolean); }
+    public void writeBoolean(String where, boolean what) { sharedPreferences.edit().putBoolean(where, what).apply(); }
+    public void putStringSet(final String key, final Set<String> value) { sharedPreferences.edit().putStringSet(key, value).apply(); }
+    public Set<String> getStringSet(final String key, final Set<String> defValue) { return sharedPreferences.getStringSet(key, defValue); }
 
     public void remove(final String key) {
         if (PROTECTED_LICENSE_KEY.equals(key)) {

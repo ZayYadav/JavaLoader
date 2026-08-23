@@ -6,6 +6,8 @@ import android.security.keystore.KeyGenParameterSpec;
 import android.security.keystore.KeyProperties;
 import android.util.Base64;
 
+import org.lsposed.lsparanoid.Obfuscate;
+
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyStore;
@@ -15,44 +17,47 @@ import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.GCMParameterSpec;
 
-/** Small fail-closed Android Keystore backed preference store for license state. */
-public final class SecurePreferences {
-    private static final String PREFS = "javaloader_secure_auth_v2";
-    private static final String KEY_ALIAS = "javaloader.auth.aes.v1";
+/** Android Keystore backed AES-GCM storage for license and session state. */
+@Obfuscate
+public final class ParallaxLoversssHu {
+    private static final String PREFS = "parallax_secure_license_v3";
+    private static final String KEY_ALIAS = "parallax.javaloader.license.aes.v3";
     private static final String TRANSFORMATION = "AES/GCM/NoPadding";
     private static final int TAG_BITS = 128;
 
     private final SharedPreferences preferences;
 
-    public SecurePreferences(Context context) {
-        preferences = context.getApplicationContext()
-                .getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+    public ParallaxLoversssHu(Context context) {
+        preferences = context.getApplicationContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE);
     }
 
-    public void putString(String key, String value) {
+    public synchronized void putString(String key, String value) {
         try {
             byte[] plaintext = (value == null ? "" : value).getBytes(StandardCharsets.UTF_8);
             Cipher cipher = Cipher.getInstance(TRANSFORMATION);
             cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey());
+            cipher.updateAAD(key.getBytes(StandardCharsets.UTF_8));
             byte[] iv = cipher.getIV();
             byte[] ciphertext = cipher.doFinal(plaintext);
             ByteBuffer packed = ByteBuffer.allocate(1 + iv.length + ciphertext.length);
             packed.put((byte) iv.length);
             packed.put(iv);
             packed.put(ciphertext);
-            preferences.edit().putString(key,
-                    Base64.encodeToString(packed.array(), Base64.NO_WRAP)).apply();
+            boolean saved = preferences.edit().putString(
+                    key, Base64.encodeToString(packed.array(), Base64.NO_WRAP)).commit();
+            if (!saved) throw new IllegalStateException("Secure preference commit failed");
         } catch (Exception error) {
             throw new IllegalStateException("Unable to protect local license state", error);
         }
     }
 
-    public String getString(String key, String defaultValue) {
+    public synchronized String getString(String key, String defaultValue) {
         String encoded = preferences.getString(key, null);
         if (encoded == null || encoded.isEmpty()) return defaultValue;
         try {
             byte[] packed = Base64.decode(encoded, Base64.NO_WRAP);
             ByteBuffer input = ByteBuffer.wrap(packed);
+            if (!input.hasRemaining()) throw new IllegalStateException("Invalid encrypted preference");
             int ivLength = input.get() & 0xff;
             if (ivLength < 12 || ivLength > 32 || input.remaining() <= ivLength) {
                 throw new IllegalStateException("Invalid encrypted preference");
@@ -63,9 +68,10 @@ public final class SecurePreferences {
             input.get(ciphertext);
             Cipher cipher = Cipher.getInstance(TRANSFORMATION);
             cipher.init(Cipher.DECRYPT_MODE, getOrCreateKey(), new GCMParameterSpec(TAG_BITS, iv));
+            cipher.updateAAD(key.getBytes(StandardCharsets.UTF_8));
             return new String(cipher.doFinal(ciphertext), StandardCharsets.UTF_8);
         } catch (Exception error) {
-            preferences.edit().remove(key).apply();
+            preferences.edit().remove(key).commit();
             return defaultValue;
         }
     }
@@ -91,14 +97,14 @@ public final class SecurePreferences {
     }
 
     public void remove(String key) {
-        preferences.edit().remove(key).apply();
+        preferences.edit().remove(key).commit();
     }
 
     public void clear() {
-        preferences.edit().clear().apply();
+        preferences.edit().clear().commit();
     }
 
-    private static SecretKey getOrCreateKey() throws Exception {
+    private static synchronized SecretKey getOrCreateKey() throws Exception {
         KeyStore store = KeyStore.getInstance("AndroidKeyStore");
         store.load(null);
         java.security.Key key = store.getKey(KEY_ALIAS, null);
