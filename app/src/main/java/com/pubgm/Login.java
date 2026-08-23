@@ -2,120 +2,92 @@
 package com.pubgm;
 
 import android.content.Context;
-import android.net.ConnectivityManager;
-import android.net.Network;
-import android.net.NetworkCapabilities;
-import android.provider.Settings;
 import android.os.Build;
+import android.provider.Settings;
 import android.util.Base64;
+
+import com.pubgm.security.AppIntegrity;
 import com.pubgm.utils.FLog;
-import java.net.NetworkInterface;
-import java.net.URLConnection;
-import java.security.SecureRandom;
-import java.security.cert.CertificateException;
-import java.security.cert.X509Certificate;
-import java.util.Collections;
-import java.util.List;
-import java.util.UUID;
-import java.security.MessageDigest;
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.util.ArrayList;
-import javax.net.ssl.HttpsURLConnection;
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.SSLSocketFactory;
-import javax.net.ssl.TrustManager;
-import javax.net.ssl.X509TrustManager;
+
 import org.json.JSONObject;
 import org.lsposed.lsparanoid.Obfuscate;
 
-// ADD BlackBoxCore IMPORT
-import top.niunaijun.blackbox.BlackBoxCore;
-import top.niunaijun.blackbox.entity.pm.InstallResult;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.cert.Certificate;
+import java.security.cert.X509Certificate;
+import java.util.ArrayList;
+import java.util.Locale;
+import java.util.UUID;
+
+import javax.net.ssl.HttpsURLConnection;
+import javax.net.ssl.SSLPeerUnverifiedException;
 
 @Obfuscate
 public class Login {
-    
+
+    private static final int CONNECT_TIMEOUT_MS = 10_000;
+    private static final int READ_TIMEOUT_MS = 20_000;
+    private static final int MAX_RESPONSE_CHARS = 64 * 1024;
+
     static {
         try {
             System.loadLibrary("client");
-        } catch(UnsatisfiedLinkError w) {
-            FLog.error(w.getMessage());
+        } catch (UnsatisfiedLinkError error) {
+            FLog.error(error.getMessage());
         }
     }
-    
+
     public static native ArrayList<String> getheaders(Context context);
     public static native String getbaseurl(Context context);
     public static native void setAuth(String token, String auth);
     public static native void setExpire(String exp);
     public static native String FixCrash();
     public static native void setAuthToken(String token);
-    
+
     private static String g_Token = "";
     private static String g_Auth = "";
     private static boolean bValid = false;
     public static String EXP = "";
     private static long rng = 0;
-    private static int retry = 0;
-    
+
     public static String getAndroidID(Context context) {
-        return Settings.Secure.getString(context.getContentResolver(), Settings.Secure.ANDROID_ID);
+        String value = Settings.Secure.getString(
+                context.getContentResolver(), Settings.Secure.ANDROID_ID);
+        return value == null ? "" : value;
     }
-    
+
     public static String getDeviceModel() {
-        return Build.MODEL;
+        return Build.MODEL == null ? "" : Build.MODEL;
     }
-    
+
     public static String getDeviceBrand() {
-        return Build.BRAND;
+        return Build.BRAND == null ? "" : Build.BRAND;
     }
-    
+
     public static String getUUID(String hwid) {
-        return UUID.nameUUIDFromBytes(hwid.getBytes()).toString();
+        return UUID.nameUUIDFromBytes(hwid.getBytes(StandardCharsets.UTF_8)).toString();
     }
-    
-    private static boolean isUnsafeNetwork(Context ctx) {
-		try {
-			ConnectivityManager cm = (ConnectivityManager) ctx.getSystemService(Context.CONNECTIVITY_SERVICE);
-			NetworkCapabilities cap = cm.getNetworkCapabilities(cm.getActiveNetwork());
-			if (cap != null && cap.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) return true;
-			for (NetworkInterface ni : Collections.list(NetworkInterface.getNetworkInterfaces())) {
-				String n = ni.getName().toLowerCase();
-				if (ni.isUp() && !ni.isLoopback() && (n.contains("tun") || n.contains("ppp") || n.contains("tap") || n.contains("vpn"))) return true;
-			}
-			if (System.getProperty("http.proxyHost") != null || android.net.Proxy.getHost(ctx) != null) return true;
-		} catch (Exception ignored) {}
-		return false;
-	}
-    
+
     public static long getExpiryTimestamp() {
         try {
             if (EXP == null || EXP.isEmpty()) return 0;
-            
-            FLog.info("Parsing EXP: " + EXP);
 
             String cleanExp = EXP.replace("\"", "").trim();
-            
             if (cleanExp.matches("^[0-9.]+$")) {
                 double val = Double.parseDouble(cleanExp);
-                if (val > 1000000000000.0) {
-                    return (long) (val / 1000.0);
-                } else if (val > 1000000000.0) {
-                    return (long) val;
-                } else if (val > 0) {
-                    return (System.currentTimeMillis() / 1000) + (long)(val * 86400.0);
-                }
+                if (val > 1000000000000.0) return (long) (val / 1000.0);
+                if (val > 1000000000.0) return (long) val;
+                if (val > 0) return (System.currentTimeMillis() / 1000L) + (long) (val * 86400.0);
             }
 
-            String expLower = cleanExp.toLowerCase();
-            long now = System.currentTimeMillis() / 1000;
-            
-            if (expLower.contains("life")) {
-                return now + (365 * 10 * 86400L);
-            }
+            String expLower = cleanExp.toLowerCase(Locale.US);
+            long now = System.currentTimeMillis() / 1000L;
+            if (expLower.contains("life")) return now + (365L * 10L * 86400L);
 
             String numericPart = expLower.replaceAll("[^0-9]", "");
             if (!numericPart.isEmpty()) {
@@ -127,152 +99,190 @@ public class Login {
             }
 
             String[] patterns = {
-                "yyyy-MM-dd HH:mm:ss",
-                "yyyy/MM/dd HH:mm:ss",
-                "dd-MM-yyyy HH:mm:ss",
-                "yyyy-MM-dd"
+                    "yyyy-MM-dd HH:mm:ss",
+                    "yyyy/MM/dd HH:mm:ss",
+                    "dd-MM-yyyy HH:mm:ss",
+                    "yyyy-MM-dd"
             };
-            
             for (String pattern : patterns) {
                 try {
-                    java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat(pattern, java.util.Locale.US);
+                    java.text.SimpleDateFormat sdf =
+                            new java.text.SimpleDateFormat(pattern, Locale.US);
                     java.util.Date date = sdf.parse(cleanExp);
-                    if (date != null) return date.getTime() / 1000;
-                } catch (Exception ignored) {}
+                    if (date != null) return date.getTime() / 1000L;
+                } catch (Exception ignored) {
+                }
             }
-
-            return 0;
-        } catch (Exception e) {
-            FLog.error("EXP Parse Error: " + e.getMessage());
-            return 0;
+        } catch (Exception error) {
+            FLog.error("EXP Parse Error: " + error.getMessage());
         }
+        return 0;
     }
 
     public static String check(Context context, String userKey) {
         try {
-            retry = 0;
-            while (isUnsafeNetwork(context)) {
-                retry++;
-                Thread.sleep(2000);
-                if (retry > 15) {
-                    return "Disable your VPN and Http Canary, or access will be blocked.";
-                }
+            if (!AppIntegrity.verify(context)) {
+                return "Application signature verification failed";
             }
+
+            String normalizedKey = userKey == null ? "" : userKey.trim();
+            if (!normalizedKey.matches("^[A-Za-z0-9_-]{4,64}$")) {
+                return "Invalid license key";
+            }
+
             String androidId = getAndroidID(context);
             String model = getDeviceModel();
             String brand = getDeviceBrand();
-            String hwid = userKey + androidId + model + brand;
+            String hwid = normalizedKey + androidId + model + brand;
             String uuid = getUUID(hwid);
-            
+
             ArrayList<String> headerData = getheaders(context);
+            if (headerData == null || headerData.size() < 12) {
+                return "Client configuration invalid";
+            }
             String baseUrl = getbaseurl(context);
+            if (baseUrl == null || baseUrl.trim().isEmpty()) {
+                return "Licensing server is not configured";
+            }
+
             String gameName = headerData.get(8);
             String userKeyParam = headerData.get(9);
             String serialParam = headerData.get(10);
             String authSecret = headerData.get(11);
-            String postData = "game=" + gameName + "&" + userKeyParam + "=" + userKey + "&" + serialParam + "=" + uuid;
-            String response = sendHttpRequest(context, baseUrl, postData);
-            if (response == null) {
-                return "Connection failed";
-            }
+            String postData = "game=" + gameName + "&" + userKeyParam + "="
+                    + normalizedKey + "&" + serialParam + "=" + uuid;
+
+            String response = sendHttpRequest(context, baseUrl, postData, headerData);
+            if (response == null) return "Secure connection failed";
+
             JSONObject result = new JSONObject(response);
-            if (!result.getBoolean("status")) {
-                return result.getString("reason");
+            if (!result.optBoolean("status", false)) {
+                return result.optString("reason", "License rejected");
             }
-            JSONObject data = result.getJSONObject("data");
-            g_Token = data.getString("token");
-            EXP = data.getString("EXP");
-            rng = data.getLong("rng");
-            if (rng + 30 > System.currentTimeMillis() / 1000) {
-                String auth = gameName + "-" + userKey + "-" + uuid + "-" + authSecret;
-                g_Auth = getMD5(auth);
-                bValid = g_Token.equals(g_Auth);
-                
-                if (bValid) {
-                    setAuth(g_Token, g_Auth);
-                    setExpire(EXP);
-                    return "OK";
-                }
+
+            JSONObject data = result.optJSONObject("data");
+            if (data == null) return "Licensing response invalid";
+            g_Token = data.optString("token", "");
+            EXP = data.optString("EXP", "");
+            rng = data.optLong("rng", 0L);
+
+            long now = System.currentTimeMillis() / 1000L;
+            if (rng <= 0L || Math.abs(now - rng) > 30L) {
+                return "Licensing response expired";
             }
-            
-            return "Invalid";
-            
-        } catch (Exception e) {
-            return "PLEASE WAIT: " + e.getMessage();
+
+            // Retain the legacy server token calculation for backend compatibility.
+            // Transport, APK identity and local state are independently hardened.
+            String auth = gameName + "-" + normalizedKey + "-" + uuid + "-" + authSecret;
+            g_Auth = getMD5(auth);
+            bValid = constantTimeEquals(g_Token, g_Auth);
+            if (!bValid) return "License verification failed";
+
+            setAuth(g_Token, g_Auth);
+            setExpire(EXP);
+            return "OK";
+        } catch (SSLPeerUnverifiedException error) {
+            return "Secure server identity validation failed";
+        } catch (Exception error) {
+            FLog.error("Login error: " + error.getMessage());
+            return "Secure license verification is temporarily unavailable";
         }
-    }
-    
-    private static String sendHttpRequest(Context context, String urlStr, String postData) {
-        HttpURLConnection conn = null;
-        try {
-            URL llllll = new URL(urlStr);
-            ArrayList<String> headerData = getheaders(context);
-            conn = (HttpURLConnection) llllll.openConnection();
-            conn.setRequestMethod("POST");
-            conn.setRequestProperty(headerData.get(0), headerData.get(1));
-            conn.setRequestProperty(headerData.get(2), headerData.get(3));
-            conn.setRequestProperty(headerData.get(4), headerData.get(5));
-            conn.setRequestProperty(headerData.get(6), headerData.get(7));
-            conn.setDoOutput(true);
-            OutputStream os = conn.getOutputStream();
-            os.write(postData.getBytes("utf-8"));
-            os.close();
-            if (conn.getResponseCode() == 200) {
-                BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream(), "utf-8"));
-                StringBuilder response = new StringBuilder();
-                String line;
-                while ((line = br.readLine()) != null) {
-                    response.append(line.trim());
-                }
-                br.close();
-                return response.toString();
-            }
-            
-        } catch (Exception e) {
-            return null;
-        } finally {
-            if (conn != null) {
-                conn.disconnect();
-            }
-        }
-        return null;
-    }
-    
-    private static SSLSocketFactory getPinnedFactory() throws Exception {
-        TrustManager tm = new X509TrustManager() {
-            public void checkClientTrusted(X509Certificate[] chain, String authType) {}
-            public void checkServerTrusted(X509Certificate[] chain, String authType) throws CertificateException {
-                try { 
-                    verifyPin(chain[0]);
-                }
-                catch (Exception e) { throw new CertificateException(e); }
-            }
-            public X509Certificate[] getAcceptedIssuers() { 
-               return new X509Certificate[0]; 
-            }
-        };
-        SSLContext ctx = SSLContext.getInstance("TLS");
-        ctx.init(null, new TrustManager[]{tm}, new SecureRandom());
-        return ctx.getSocketFactory();
     }
 
-    private static void verifyPin(X509Certificate cert) throws Exception {
-        MessageDigest md = MessageDigest.getInstance("SHA-256");
-        byte[] pubKey = cert.getPublicKey().getEncoded();
-        byte[] digest = md.digest(pubKey);
-        String pin = "sha256/" + Base64.encodeToString(digest, Base64.NO_WRAP);
+    private static String sendHttpRequest(
+            Context context,
+            String urlString,
+            String postData,
+            ArrayList<String> headerData) throws Exception {
+        URL url = new URL(urlString);
+        if (!"https".equalsIgnoreCase(url.getProtocol())) {
+            throw new SSLPeerUnverifiedException("HTTPS is required for licensing");
+        }
+
+        HttpsURLConnection connection = (HttpsURLConnection) url.openConnection();
+        try {
+            connection.setRequestMethod("POST");
+            connection.setConnectTimeout(CONNECT_TIMEOUT_MS);
+            connection.setReadTimeout(READ_TIMEOUT_MS);
+            connection.setUseCaches(false);
+            connection.setInstanceFollowRedirects(false);
+            connection.setDoOutput(true);
+            connection.setRequestProperty("Accept", "application/json");
+            connection.setRequestProperty("Cache-Control", "no-store");
+            connection.setRequestProperty(headerData.get(0), headerData.get(1));
+            connection.setRequestProperty(headerData.get(2), headerData.get(3));
+            connection.setRequestProperty(headerData.get(4), headerData.get(5));
+            connection.setRequestProperty(headerData.get(6), headerData.get(7));
+            connection.setRequestProperty(
+                    "X-App-Certificate-SHA256",
+                    AppIntegrity.currentSigningCertificateSha256(context));
+
+            connection.connect();
+            verifyConfiguredPin(connection);
+
+            byte[] payload = postData.getBytes(StandardCharsets.UTF_8);
+            try (OutputStream output = connection.getOutputStream()) {
+                output.write(payload);
+            }
+
+            int status = connection.getResponseCode();
+            if (status != HttpsURLConnection.HTTP_OK) return null;
+
+            StringBuilder response = new StringBuilder();
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(
+                    connection.getInputStream(), StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    if (response.length() + line.length() > MAX_RESPONSE_CHARS) {
+                        throw new IllegalStateException("Licensing response is too large");
+                    }
+                    response.append(line);
+                }
+            }
+            return response.toString();
+        } finally {
+            connection.disconnect();
+        }
     }
-    
+
+    private static void verifyConfiguredPin(HttpsURLConnection connection) throws Exception {
+        String configured = BuildConfig.JAVA_LOADER_TLS_PINS;
+        if (configured == null || configured.trim().isEmpty()) {
+            // Platform CA and hostname validation still apply. Production can additionally set SPKI pins.
+            return;
+        }
+
+        Certificate[] certificates = connection.getServerCertificates();
+        if (certificates == null || certificates.length == 0
+                || !(certificates[0] instanceof X509Certificate)) {
+            throw new SSLPeerUnverifiedException("No peer certificate");
+        }
+        X509Certificate certificate = (X509Certificate) certificates[0];
+        byte[] digest = MessageDigest.getInstance("SHA-256")
+                .digest(certificate.getPublicKey().getEncoded());
+        String actual = "sha256/" + Base64.encodeToString(digest, Base64.NO_WRAP);
+
+        for (String candidate : configured.split(",")) {
+            if (constantTimeEquals(actual, candidate.trim())) return;
+        }
+        throw new SSLPeerUnverifiedException("TLS public-key pin mismatch");
+    }
+
+    private static boolean constantTimeEquals(String expected, String actual) {
+        if (expected == null || actual == null) return false;
+        return MessageDigest.isEqual(
+                expected.getBytes(StandardCharsets.US_ASCII),
+                actual.getBytes(StandardCharsets.US_ASCII));
+    }
+
     private static String getMD5(String input) {
         try {
             MessageDigest md = MessageDigest.getInstance("MD5");
-            byte[] digest = md.digest(input.getBytes());
+            byte[] digest = md.digest(input.getBytes(StandardCharsets.UTF_8));
             StringBuilder sb = new StringBuilder();
-            for (byte b : digest) {
-                sb.append(String.format("%02x", b));
-            }
+            for (byte b : digest) sb.append(String.format(Locale.US, "%02x", b));
             return sb.toString();
-        } catch (Exception e) {
+        } catch (Exception ignored) {
             return "";
         }
     }
