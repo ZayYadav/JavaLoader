@@ -49,6 +49,43 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
+      - name: Preflight runtime core dependency
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if ! grep -Rqs 'top\.niunaijun\.blackbox' app/src/main/java; then
+            exit 0
+          fi
+
+          FOUND_CORE=0
+          if [ -d app/libs ]; then
+            while IFS= read -r dependency; do
+              case "$dependency" in
+                *.aar)
+                  tmpdir=$(mktemp -d)
+                  if unzip -p "$dependency" classes.jar > "$tmpdir/classes.jar" 2>/dev/null \
+                    && jar tf "$tmpdir/classes.jar" 2>/dev/null \
+                    | grep -q '^top/niunaijun/blackbox/BlackBoxCore\.class$'; then
+                    FOUND_CORE=1
+                  fi
+                  rm -rf "$tmpdir"
+                  ;;
+                *.jar)
+                  if jar tf "$dependency" 2>/dev/null \
+                    | grep -q '^top/niunaijun/blackbox/BlackBoxCore\.class$'; then
+                    FOUND_CORE=1
+                  fi
+                  ;;
+              esac
+            done < <(find app/libs -maxdepth 1 -type f \( -name '*.aar' -o -name '*.jar' \) -print)
+          fi
+
+          if [ "$FOUND_CORE" -ne 1 ]; then
+            echo '::error title=Missing runtime core dependency::JavaLoader imports top.niunaijun.blackbox.* but the repository does not contain the corresponding BlackBoxCore runtime dependency. Add the legitimate AAR/JAR you are authorized to ship under app/libs; CI intentionally does not download or inject an unpinned runtime core.'
+            exit 1
+          fi
+
       - name: Set up JDK 17
         uses: actions/setup-java@v5
         with:
