@@ -5,26 +5,29 @@ plugins {
 
 apply from: '../signing.gradle'
 
+def envValue = { String preferred, String legacy ->
+    System.getenv(preferred) ?: System.getenv(legacy) ?: ''
+}
 def javaLoaderAllowedSigningSha256 = providers.gradleProperty('javaLoaderAllowedSigningSha256')
-        .orElse(System.getenv('JAVA_LOADER_ALLOWED_SIGNING_SHA256') ?: '')
+        .orElse(envValue('ONECORE_ALLOWED_SIGNING_SHA256', 'JAVA_LOADER_ALLOWED_SIGNING_SHA256'))
         .get()
         .replace(':', '')
         .trim()
         .toUpperCase(java.util.Locale.ROOT)
 def javaLoaderTlsPins = providers.gradleProperty('javaLoaderTlsPins')
-        .orElse(System.getenv('JAVA_LOADER_TLS_PINS') ?: '')
+        .orElse(envValue('PARALLAX_TLS_PINS', 'JAVA_LOADER_TLS_PINS'))
         .get()
         .trim()
 def javaLoaderApiPublicKey = providers.gradleProperty('javaLoaderApiPublicKey')
-        .orElse(System.getenv('JAVA_LOADER_API_PUBLIC_KEY_B64') ?: '')
+        .orElse(envValue('PARALLAX_API_PUBLIC_KEY_B64', 'JAVA_LOADER_API_PUBLIC_KEY_B64'))
         .get()
         .trim()
 def javaLoaderLicenseUrl = providers.gradleProperty('javaLoaderLicenseUrl')
-        .orElse(System.getenv('JAVA_LOADER_LICENSE_URL') ?: '')
+        .orElse(envValue('PARALLAX_LICENSE_URL', 'JAVA_LOADER_LICENSE_URL'))
         .get()
         .trim()
 def javaLoaderGameId = providers.gradleProperty('javaLoaderGameId')
-        .orElse(System.getenv('JAVA_LOADER_GAME_ID') ?: 'PUBG')
+        .orElse(envValue('PARALLAX_GAME_ID', 'JAVA_LOADER_GAME_ID') ?: 'PUBG')
         .get()
         .trim()
 def javaString = { String value ->
@@ -36,49 +39,69 @@ def releaseTaskRequested = gradle.startParameter.taskNames.any {
 
 if (!javaLoaderAllowedSigningSha256.isEmpty()
         && !(javaLoaderAllowedSigningSha256 ==~ /^[0-9A-F]{64}(,[0-9A-F]{64})*$/)) {
-    throw new GradleException('JAVA_LOADER_ALLOWED_SIGNING_SHA256 must contain one or more 64-digit SHA-256 certificate digests')
+    throw new GradleException('Signing SHA-256 must contain one or more 64-digit certificate digests')
 }
 if (!javaLoaderTlsPins.isEmpty()) {
     def pins = javaLoaderTlsPins.split(',', -1).collect { it.trim() }
     if (pins.any { !(it ==~ /^sha256\/[A-Za-z0-9+\/]{43}=$/) }) {
-        throw new GradleException('JAVA_LOADER_TLS_PINS must contain comma-separated SHA-256 SPKI pins')
+        throw new GradleException('TLS pins must contain comma-separated SHA-256 SPKI pins')
     }
 }
 if (!javaLoaderLicenseUrl.isEmpty()) {
     try {
         def uri = new java.net.URI(javaLoaderLicenseUrl)
         if (!'https'.equalsIgnoreCase(uri.scheme) || uri.host == null || uri.host.trim().isEmpty()) {
-            throw new GradleException('JAVA_LOADER_LICENSE_URL must be a valid HTTPS URL')
+            throw new GradleException('License URL must be a valid HTTPS URL')
         }
     } catch (java.net.URISyntaxException error) {
-        throw new GradleException('JAVA_LOADER_LICENSE_URL is invalid', error)
+        throw new GradleException('License URL is invalid', error)
     }
 }
 if (!javaLoaderApiPublicKey.isEmpty()) {
     try {
         byte[] decoded = java.util.Base64.decoder.decode(javaLoaderApiPublicKey)
         if (decoded.length < 256 || decoded.length > 1024) {
-            throw new GradleException('JAVA_LOADER_API_PUBLIC_KEY_B64 has an invalid DER size')
+            throw new GradleException('Licensing RSA public key has an invalid DER size')
         }
     } catch (IllegalArgumentException error) {
-        throw new GradleException('JAVA_LOADER_API_PUBLIC_KEY_B64 is not valid Base64 DER', error)
+        throw new GradleException('Licensing RSA public key is not valid Base64 DER', error)
     }
 }
 if (releaseTaskRequested) {
     if (javaLoaderAllowedSigningSha256.isEmpty()) {
-        throw new GradleException('JAVA_LOADER_ALLOWED_SIGNING_SHA256 is required for release builds')
+        throw new GradleException('Signing certificate SHA-256 is required for release builds')
     }
     if (javaLoaderTlsPins.isEmpty()) {
-        throw new GradleException('JAVA_LOADER_TLS_PINS is required for release builds')
+        throw new GradleException('TLS pins are required for release builds')
     }
     if (javaLoaderApiPublicKey.isEmpty()) {
-        throw new GradleException('JAVA_LOADER_API_PUBLIC_KEY_B64 is required for release builds')
+        throw new GradleException('Licensing RSA public key is required for release builds')
     }
     if (javaLoaderLicenseUrl.isEmpty()) {
-        throw new GradleException('JAVA_LOADER_LICENSE_URL is required for release builds')
+        throw new GradleException('HTTPS licensing URL is required for release builds')
     }
     if (!(javaLoaderGameId ==~ /^[A-Za-z0-9_.-]{2,32}$/)) {
-        throw new GradleException('JAVA_LOADER_GAME_ID is invalid')
+        throw new GradleException('Game id is invalid')
+    }
+}
+
+// OneCore-style string protection is intentionally limited to auth/security code. Existing
+// gameplay/native packages are excluded so the hardening pass does not alter or conceal them.
+def oneCoreAuthStringFilter = { String className ->
+    (className.startsWith('com.pubgm.security.')
+            || className == 'com.pubgm.Login'
+            || className.startsWith('com.pubgm.activity.LoginActivity'))
+            && className != 'com.pubgm.BuildConfig'
+            && className != 'com.pubgm.R'
+            && !className.startsWith('com.pubgm.R$')
+}.dehydrate()
+
+lsparanoid {
+    seed = 0x4F4E4543
+    includeDependencies = false
+    classFilter = oneCoreAuthStringFilter
+    variantFilter = { variant ->
+        variant.buildType == 'release'
     }
 }
 
@@ -88,17 +111,18 @@ android {
     buildToolsVersion rootProject.ext.buildTools
 
     lint {
-       abortOnError false
-       checkReleaseBuilds false
+        abortOnError false
+        checkReleaseBuilds false
     }
 
     defaultConfig {
-        applicationId "Game.Loader"
+        applicationId "OneCore.Vip"
         minSdk rootProject.ext.minSdk
         targetSdk rootProject.ext.targetSdk
         versionCode rootProject.ext.versionCode
         versionName rootProject.ext.versionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        resourceConfigurations += ['en']
         buildConfigField "String", "EXPECTED_SIGNATURE_SHA256", javaString(javaLoaderAllowedSigningSha256)
         buildConfigField "String", "JAVA_LOADER_TLS_PINS", javaString(javaLoaderTlsPins)
         buildConfigField "String", "JAVA_LOADER_API_PUBLIC_KEY_B64", javaString(javaLoaderApiPublicKey)
@@ -125,6 +149,8 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
         debug {
+            debuggable true
+            jniDebuggable true
             shrinkResources false
             minifyEnabled false
             signingConfig signingConfigs.debug
@@ -132,20 +158,25 @@ android {
         }
     }
 
-    packagingOptions {
+    packaging {
+        jniLibs {
+            useLegacyPackaging true
+        }
         resources {
-            excludes += "/META-INF/AL2.0"
-            excludes += "/META-INF/LGPL2.1"
-            excludes += "/META-INF/DEPENDENCIES"
-            excludes += "/META-INF/LICENSE"
-            excludes += "/META-INF/LICENSE.txt"
-            excludes += "/META-INF/license.txt"
-            excludes += "/META-INF/NOTICE"
-            excludes += "/META-INF/NOTICE.txt"
-            excludes += "/META-INF/notice.txt"
-            excludes += "/META-INF/ASL2.0"
-            excludes += "/META-INF/*.kotlin_module"
-            excludes += "/META-INF/gradle/incremental.annotation.processors"
+            excludes += [
+                    '/META-INF/AL2.0',
+                    '/META-INF/LGPL2.1',
+                    '/META-INF/DEPENDENCIES',
+                    '/META-INF/LICENSE',
+                    '/META-INF/LICENSE.txt',
+                    '/META-INF/license.txt',
+                    '/META-INF/NOTICE',
+                    '/META-INF/NOTICE.txt',
+                    '/META-INF/notice.txt',
+                    '/META-INF/ASL2.0',
+                    '/META-INF/*.kotlin_module',
+                    '/META-INF/gradle/incremental.annotation.processors'
+            ]
         }
     }
 
@@ -170,8 +201,9 @@ android {
 dependencies {
     implementation fileTree(dir: "libs", include: ["*.jar", "*.aar"])
 
-    implementation 'androidx.appcompat:appcompat:1.2.0'
-    implementation 'com.google.android.material:material:1.11.0'
+    implementation 'com.android.tools.build:apksig:8.2.1'
+    implementation 'androidx.appcompat:appcompat:1.7.1'
+    implementation 'com.google.android.material:material:1.12.0'
     implementation 'net.lingala.zip4j:zip4j:2.11.5'
     implementation 'com.squareup.okhttp3:okhttp:4.12.0'
     implementation 'com.squareup.okio:okio:3.9.0'

@@ -8,6 +8,7 @@ import com.pubgm.BuildConfig;
 import org.json.JSONObject;
 import org.lsposed.lsparanoid.Obfuscate;
 
+import java.net.Proxy;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.text.ParsePosition;
@@ -30,19 +31,19 @@ import okhttp3.Response;
 import okhttp3.ResponseBody;
 import okio.BufferedSource;
 
-/** Fail-closed OneCore-style encrypted key licensing client. */
+/** Fail-closed licensing client compatible with the OneCore Engine hosted-license v2 contract. */
 @Obfuscate
 public final class ParallaxBhaiServerSeAaya {
     private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
     private static final long MAX_RESPONSE_BYTES = 32L * 1024L;
-    private static final long MAX_CLOCK_SKEW_SECONDS = 90L;
+    private static final long MAX_CLOCK_SKEW_SECONDS = 60L;
     private static final Pattern ACTIVATION_KEY_PATTERN = Pattern.compile("^[A-Za-z0-9_-]{4,64}$");
-    private static final Pattern RECEIPT_PATTERN = Pattern.compile("^[A-Za-z0-9_-]{24,96}$");
+    private static final Pattern RECEIPT_PATTERN = Pattern.compile("^[A-Za-z0-9_-]{32,64}$");
     private static final Pattern TLS_PIN_PATTERN = Pattern.compile("^sha256/[A-Za-z0-9+/]{43}=$");
     private static final Pattern PUBLIC_KEY_PATTERN = Pattern.compile("^[A-Za-z0-9+/]+={0,2}$");
 
     private static final String LICENSE_KEY = "PARALLAX_LICENSE_KEY";
-    private static final String LICENSE_RECEIPT = "PARALLAX_LICENSE_RECEIPT";
+    private static final String LICENSE_RECEIPT = "PARALLAX_LICENSE_TOKEN";
     private static final String LICENSE_EXPIRES_AT = "PARALLAX_LICENSE_EXPIRES_AT";
     private static final String VERIFIED_SERVER_TIME = "PARALLAX_VERIFIED_SERVER_TIME";
     private static final String VERIFIED_ELAPSED_TIME = "PARALLAX_VERIFIED_ELAPSED_TIME";
@@ -61,9 +62,7 @@ public final class ParallaxBhaiServerSeAaya {
 
         HttpUrl parsedUrl = HttpUrl.get(connectUrl);
         this.connectHost = parsedUrl.host();
-        if (!"https".equals(parsedUrl.scheme())) {
-            throw new IllegalStateException("Licensing URL must use HTTPS");
-        }
+        if (!"https".equals(parsedUrl.scheme())) throw new IllegalStateException("Licensing URL must use HTTPS");
 
         CertificatePinner.Builder pinnerBuilder = new CertificatePinner.Builder();
         for (String pin : pins) pinnerBuilder.add(connectHost, pin);
@@ -71,6 +70,7 @@ public final class ParallaxBhaiServerSeAaya {
         this.httpClient = new OkHttpClient.Builder()
                 .certificatePinner(pinnerBuilder.build())
                 .connectionSpecs(Arrays.asList(ConnectionSpec.MODERN_TLS))
+                .proxy(Proxy.NO_PROXY)
                 .connectTimeout(10, TimeUnit.SECONDS)
                 .readTimeout(20, TimeUnit.SECONDS)
                 .writeTimeout(15, TimeUnit.SECONDS)
@@ -91,25 +91,15 @@ public final class ParallaxBhaiServerSeAaya {
             String normalizedKey = normalizeActivationKey(activationKey);
             if (!isSupportedActivationKey(normalizedKey)) {
                 clearLicense();
-                return "Invalid license key";
+                return "Use a key created in OneCore Control";
             }
-
-            String serial = ParallaxSoloHu.deviceId();
-            String certificate = ParallaxKaBhaiJanguHaii.currentSigningCertificateSha256(context);
-            long clientTime = System.currentTimeMillis() / 1000L;
-            String deviceProofMessage = BuildConfig.JAVA_LOADER_GAME_ID + "|" + normalizedKey + "|"
-                    + serial + "|" + context.getPackageName() + "|" + certificate + "|"
-                    + BuildConfig.VERSION_CODE + "|" + clientTime;
 
             JSONObject payload = new JSONObject();
             payload.put("game", BuildConfig.JAVA_LOADER_GAME_ID);
             payload.put("user_key", normalizedKey);
-            payload.put("serial", serial);
-            payload.put("device_public_key", ParallaxSoloHu.publicKeyBase64());
-            payload.put("device_proof_time", clientTime);
-            payload.put("device_signature", ParallaxSoloHu.signBase64(deviceProofMessage));
+            payload.put("serial", ParallaxSoloHu.deviceId());
             payload.put("package_name", context.getPackageName());
-            payload.put("certificate_sha256", certificate);
+            payload.put("certificate_sha256", ParallaxKaBhaiJanguHaii.currentSigningCertificateSha256(context));
             payload.put("version_code", BuildConfig.VERSION_CODE);
 
             encrypted = ParallaxKaRaazHai.encryptRequest(payload, apiPublicKey);
@@ -129,9 +119,8 @@ public final class ParallaxBhaiServerSeAaya {
 
                 String body = readBoundedJson(response);
                 JSONObject decrypted = ParallaxKaRaazHai.decryptResponse(body, encrypted);
-                long receivedAt = System.currentTimeMillis() / 1000L;
                 ParsedLicense license = parseDecryptedResponse(
-                        decrypted, encrypted.nonce, encrypted.canary, receivedAt);
+                        decrypted, encrypted.nonce, encrypted.canary, System.currentTimeMillis() / 1000L);
                 if (!response.isSuccessful()) {
                     throw new LicenseRejectedException("Licensing server rejected the request");
                 }
@@ -252,7 +241,7 @@ public final class ParallaxBhaiServerSeAaya {
             throws Exception {
         if (!constantTimeEquals(requestNonce, response.optString("request_nonce", ""))
                 || !constantTimeEquals(requestCanary, response.optString("canary", ""))) {
-            throw new LicenseRejectedException("Licensing response binding failed");
+            throw new LicenseRejectedException("Licensing response canary validation failed");
         }
         if (!response.optBoolean("status", false)) {
             String reason = response.optString("reason", "License was rejected").trim();
@@ -268,7 +257,7 @@ public final class ParallaxBhaiServerSeAaya {
             throw new LicenseRejectedException("Licensing receipt is invalid");
         }
         JSONObject data = response.optJSONObject("data");
-        if (data == null) throw new LicenseRejectedException("Licensing payload is missing");
+        if (data == null) throw new LicenseRejectedException("Licensing server payload is missing");
         long expiresAt = parseUtcExpiry(data.optString("expired_date", "").trim());
         if (expiresAt <= serverTime) throw new LicenseRejectedException("EXPIRED KEY");
         return new ParsedLicense(receipt, expiresAt, serverTime);
@@ -333,7 +322,7 @@ public final class ParallaxBhaiServerSeAaya {
             return "Secure server identity validation failed";
         }
         if (normalized.contains("configured") || normalized.contains("encryption")
-                || normalized.contains("binding") || normalized.contains("unsupported response")
+                || normalized.contains("canary") || normalized.contains("unsupported response")
                 || normalized.contains("transport changed") || normalized.contains("too large")) {
             return message == null ? "Secure license configuration is invalid" : message;
         }
