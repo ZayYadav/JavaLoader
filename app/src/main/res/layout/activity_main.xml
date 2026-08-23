@@ -1,349 +1,360 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/bg_premium_back">
+    android:background="@drawable/onecore_background">
 
-    <!-- Animated Background Blobs -->
     <View
         android:id="@+id/blob_purple"
-        android:layout_width="350dp"
-        android:layout_height="350dp"
-        android:background="@drawable/bg_blob_purple"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        android:layout_marginStart="-120dp"
-        android:alpha="0.6" />
+        android:layout_width="340dp"
+        android:layout_height="340dp"
+        android:layout_gravity="top|start"
+        android:layout_marginStart="-170dp"
+        android:layout_marginTop="100dp"
+        android:background="@drawable/onecore_glow_gold" />
 
     <View
         android:id="@+id/blob_pink"
-        android:layout_width="400dp"
-        android:layout_height="400dp"
-        android:background="@drawable/bg_blob_pink"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
+        android:layout_width="380dp"
+        android:layout_height="380dp"
+        android:layout_gravity="top|end"
+        android:layout_marginTop="-160dp"
         android:layout_marginEnd="-180dp"
-        android:layout_marginTop="-80dp"
-        android:alpha="0.6" />
+        android:background="@drawable/onecore_glow_amber" />
 
     <View
         android:id="@+id/blob_blue"
-        android:layout_width="300dp"
-        android:layout_height="300dp"
-        android:background="@drawable/bg_blob_blue"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        android:layout_marginEnd="-80dp"
+        android:layout_width="330dp"
+        android:layout_height="330dp"
+        android:layout_gravity="bottom|end"
+        android:layout_marginEnd="-130dp"
         android:layout_marginBottom="-80dp"
-        android:alpha="0.6" />
+        android:background="@drawable/onecore_glow_blue" />
 
-    <ScrollView
+    <androidx.core.widget.NestedScrollView
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:clipToPadding="false"
         android:fillViewport="true"
-        android:scrollbars="none">
+        android:paddingStart="18dp"
+        android:paddingTop="22dp"
+        android:paddingEnd="18dp"
+        android:paddingBottom="30dp">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:padding="20dp">
+            android:orientation="vertical">
 
-            <!-- Premium Subscription Card -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:fontFamily="sans-serif-black"
+                        android:letterSpacing="0.11"
+                        android:text="ONECORE MYTHOS"
+                        android:textColor="@color/onecore_gold"
+                        android:textSize="10sp" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:fontFamily="sans-serif-black"
+                        android:text="Control Center"
+                        android:textColor="@color/onecore_text"
+                        android:textSize="27sp" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="3dp"
+                        android:text="Signed build • encrypted session • pinned transport"
+                        android:textColor="@color/onecore_text_secondary"
+                        android:textSize="11sp" />
+                </LinearLayout>
+
+                <ImageView
+                    android:layout_width="58dp"
+                    android:layout_height="58dp"
+                    android:background="@drawable/onecore_surface_soft"
+                    android:contentDescription="OneCore MyThos"
+                    android:padding="8dp"
+                    android:scaleType="centerInside"
+                    android:src="@drawable/ic_launcher" />
+            </LinearLayout>
+
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
                 app:cardBackgroundColor="@android:color/transparent"
-                app:cardCornerRadius="24dp"
-                app:cardElevation="8dp"
+                app:cardCornerRadius="27dp"
+                app:cardElevation="10dp"
                 app:strokeWidth="0dp">
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:background="@drawable/bg_glass_card_white"
+                    android:background="@drawable/onecore_surface"
                     android:orientation="vertical"
-                    android:padding="24dp">
+                    android:padding="20dp">
 
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="Subscription Active"
-                        android:textColor="#1E293B"
-                        android:textSize="18sp"
-                        android:textStyle="bold" />
-
-                    <!-- Timer Display -->
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="16dp"
+                        android:gravity="center_vertical"
                         android:orientation="horizontal">
 
                         <LinearLayout
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
                             android:layout_weight="1"
-                            android:gravity="center"
                             android:orientation="vertical">
-                            <TextView
-                                android:id="@+id/days"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="00"
-                                android:textColor="@color/primary"
-                                android:textSize="24sp"
-                                android:textStyle="bold" />
+
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="Days"
-                                android:textColor="#64748B"
-                                android:textSize="10sp" />
+                                android:fontFamily="sans-serif-black"
+                                android:text="Protected Session"
+                                android:textColor="@color/onecore_text"
+                                android:textSize="19sp" />
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="3dp"
+                                android:text="Live license window"
+                                android:textColor="@color/onecore_text_secondary"
+                                android:textSize="11sp" />
                         </LinearLayout>
 
-                        <LinearLayout
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="30dp"
+                            android:background="@drawable/onecore_badge"
+                            android:fontFamily="sans-serif-black"
                             android:gravity="center"
-                            android:orientation="vertical">
-                            <TextView
-                                android:id="@+id/hours"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="00"
-                                android:textColor="@color/primary"
-                                android:textSize="24sp"
-                                android:textStyle="bold" />
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="Hours"
-                                android:textColor="#64748B"
-                                android:textSize="10sp" />
-                        </LinearLayout>
+                            android:paddingStart="12dp"
+                            android:paddingEnd="12dp"
+                            android:text="ACTIVE"
+                            android:textColor="@color/onecore_success"
+                            android:textSize="9sp" />
+                    </LinearLayout>
 
-                        <LinearLayout
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:gravity="center"
-                            android:orientation="vertical">
-                            <TextView
-                                android:id="@+id/minutes"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="00"
-                                android:textColor="@color/primary"
-                                android:textSize="24sp"
-                                android:textStyle="bold" />
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="Mins"
-                                android:textColor="#64748B"
-                                android:textSize="10sp" />
-                        </LinearLayout>
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="18dp"
+                        android:baselineAligned="false"
+                        android:orientation="horizontal">
 
-                        <LinearLayout
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:gravity="center"
-                            android:orientation="vertical">
-                            <TextView
-                                android:id="@+id/seconds"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="00"
-                                android:textColor="@color/primary"
-                                android:textSize="24sp"
-                                android:textStyle="bold" />
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="Secs"
-                                android:textColor="#64748B"
-                                android:textSize="10sp" />
+                        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:gravity="center" android:orientation="vertical">
+                            <TextView android:id="@+id/days" android:layout_width="wrap_content" android:layout_height="wrap_content" android:fontFamily="sans-serif-black" android:text="00" android:textColor="@color/onecore_gold" android:textSize="24sp" />
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="DAYS" android:textColor="@color/onecore_muted" android:textSize="9sp" />
+                        </LinearLayout>
+                        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:gravity="center" android:orientation="vertical">
+                            <TextView android:id="@+id/hours" android:layout_width="wrap_content" android:layout_height="wrap_content" android:fontFamily="sans-serif-black" android:text="00" android:textColor="@color/onecore_gold" android:textSize="24sp" />
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="HOURS" android:textColor="@color/onecore_muted" android:textSize="9sp" />
+                        </LinearLayout>
+                        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:gravity="center" android:orientation="vertical">
+                            <TextView android:id="@+id/minutes" android:layout_width="wrap_content" android:layout_height="wrap_content" android:fontFamily="sans-serif-black" android:text="00" android:textColor="@color/onecore_gold" android:textSize="24sp" />
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="MIN" android:textColor="@color/onecore_muted" android:textSize="9sp" />
+                        </LinearLayout>
+                        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:gravity="center" android:orientation="vertical">
+                            <TextView android:id="@+id/seconds" android:layout_width="wrap_content" android:layout_height="wrap_content" android:fontFamily="sans-serif-black" android:text="00" android:textColor="@color/onecore_gold" android:textSize="24sp" />
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="SEC" android:textColor="@color/onecore_muted" android:textSize="9sp" />
                         </LinearLayout>
                     </LinearLayout>
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
-            <!-- Compact Mode Selection -->
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btn_switch_mode"
                 android:layout_width="match_parent"
                 android:layout_height="56dp"
-                android:layout_marginTop="20dp"
-                android:text="SELECT GAME MODE"
-                android:textColor="#64748B"
-                android:textSize="14sp"
-                android:textStyle="bold"
+                android:layout_marginTop="18dp"
+                android:background="@drawable/onecore_outline_button"
+                android:fontFamily="sans-serif-black"
+                android:text="SELECT RUNTIME MODE"
+                android:textColor="@color/onecore_gold"
+                android:textSize="12sp"
                 app:backgroundTint="@null"
-                android:background="@drawable/bg_glass_card_white"
-                app:cornerRadius="16dp"
-                app:icon="@drawable/animation_play"
-                app:iconGravity="textStart"
-                app:iconTint="#64748B" />
+                app:cornerRadius="18dp" />
 
-            <!-- Main Game Control Section -->
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="20dp"
+                android:layout_marginTop="16dp"
                 app:cardBackgroundColor="@android:color/transparent"
-                app:cardCornerRadius="24dp"
+                app:cardCornerRadius="25dp"
                 app:cardElevation="8dp"
                 app:strokeWidth="0dp">
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:background="@drawable/bg_glass_card_white"
-                    android:gravity="center"
+                    android:background="@drawable/onecore_surface"
                     android:orientation="vertical"
-                    android:padding="24dp">
+                    android:padding="18dp">
 
-                    <com.google.android.material.imageview.ShapeableImageView
-                        android:id="@+id/main_game_icon"
-                        android:layout_width="100dp"
-                        android:layout_height="100dp"
-                        android:padding="8dp"
-                        android:src="@drawable/pubg_india"
-                        android:background="#1A000000"
-                        app:shapeAppearanceOverlay="@style/ShapeAppearance.Material3.Corner.Medium" />
-
-                    <TextView
-                        android:id="@+id/main_game_title"
-                        android:layout_width="wrap_content"
+                    <LinearLayout
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="12dp"
-                        android:text="BGMI MOBILE 4.5"
-                        android:textColor="#1E293B"
-                        android:textSize="20sp"
-                        android:textStyle="bold" />
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
 
-                    <TextView
-                        android:id="@+id/main_game_status"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="Status: SAFE"
-                        android:textColor="#10B981"
-                        android:textSize="12sp"
-                        android:textStyle="bold" />
+                        <ImageView
+                            android:id="@+id/main_game_icon"
+                            android:layout_width="76dp"
+                            android:layout_height="76dp"
+                            android:background="@drawable/onecore_surface_soft"
+                            android:padding="8dp"
+                            android:scaleType="fitCenter"
+                            android:src="@drawable/pubg_india" />
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="14dp"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:id="@+id/main_game_title"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:fontFamily="sans-serif-black"
+                                android:text="Selected Runtime"
+                                android:textColor="@color/onecore_text"
+                                android:textSize="17sp" />
+
+                            <TextView
+                                android:id="@+id/main_game_status"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="5dp"
+                                android:text="Status: READY"
+                                android:textColor="@color/onecore_success"
+                                android:textSize="11sp" />
+                        </LinearLayout>
+                    </LinearLayout>
 
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="16dp"
-                        android:orientation="horizontal"
-                        android:gravity="center">
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
 
                         <com.google.android.material.button.MaterialButton
                             android:id="@+id/start_game"
                             android:layout_width="0dp"
                             android:layout_height="60dp"
                             android:layout_weight="1"
+                            android:background="@drawable/onecore_primary_button"
+                            android:fontFamily="sans-serif-black"
                             android:text="INSTALL GAME"
-                            android:textColor="@color/white"
-                            android:textSize="18sp"
-                            android:textStyle="bold"
+                            android:textColor="@color/onecore_ink"
+                            android:textSize="15sp"
                             app:backgroundTint="@null"
-                            android:background="@drawable/bg_premium_button"
-                            app:cornerRadius="16dp" />
+                            app:cornerRadius="19dp" />
 
-                        <ImageButton
+                        <com.google.android.material.button.MaterialButton
                             android:id="@+id/uninstall_game"
-                            android:layout_width="60dp"
+                            android:layout_width="94dp"
                             android:layout_height="60dp"
-                            android:layout_marginStart="12dp"
-                            android:background="@drawable/bg_edittext_premium"
-                            android:src="@drawable/ic_clear"
-                            android:padding="16dp"
+                            android:layout_marginStart="10dp"
+                            android:background="@drawable/onecore_outline_button"
+                            android:fontFamily="sans-serif-black"
+                            android:text="UNINSTALL"
+                            android:textColor="@color/onecore_danger"
+                            android:textSize="10sp"
                             android:visibility="gone"
-                            app:tint="#EF4444" />
+                            app:backgroundTint="@null"
+                            app:cornerRadius="18dp" />
                     </LinearLayout>
-
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
-            <!-- Dedicated Box for Hide ESP in Recording -->
-            <com.google.android.material.card.MaterialCardView
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="20dp"
-                app:cardBackgroundColor="@android:color/transparent"
-                app:cardCornerRadius="20dp"
-                app:strokeWidth="0dp">
+                android:layout_marginTop="16dp"
+                android:background="@drawable/onecore_surface_soft"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:padding="15dp">
+
+                <com.google.android.material.switchmaterial.SwitchMaterial
+                    android:id="@+id/hide_esp"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    app:useMaterialThemeColors="true" />
 
                 <LinearLayout
-                    android:layout_width="match_parent"
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:background="@drawable/bg_glass_card_white"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal"
-                    android:padding="16dp">
-
-                    <com.google.android.material.switchmaterial.SwitchMaterial
-                        android:id="@+id/hide_esp"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        app:thumbTint="#EC4899"
-                        app:trackTint="#3B82F6"
-                        app:useMaterialThemeColors="false" />
+                    android:layout_marginStart="12dp"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
 
                     <TextView
                         android:id="@+id/hide_esp_text"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginStart="12dp"
-                        android:text="HIDE ESP IN RECORDING"
-                        android:textColor="@color/primary"
-                        android:textSize="14sp"
-                        android:textStyle="bold"
-                        android:shadowColor="#40000000"
-                        android:shadowDx="2"
-                        android:shadowDy="2"
-                        android:shadowRadius="2" />
+                        android:fontFamily="sans-serif-black"
+                        android:text="LEGACY OVERLAY DISPLAY"
+                        android:textColor="@color/onecore_text"
+                        android:textSize="13sp" />
 
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="3dp"
+                        android:text="Existing display option"
+                        android:textColor="@color/onecore_muted"
+                        android:textSize="10sp" />
                 </LinearLayout>
-            </com.google.android.material.card.MaterialCardView>
+            </LinearLayout>
 
-
-
-
-
-            <!-- Bottom Action Buttons -->
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/switch_version_bottom"
                 android:layout_width="match_parent"
                 android:layout_height="56dp"
-                android:layout_marginTop="20dp"
+                android:layout_marginTop="16dp"
+                android:background="@drawable/onecore_outline_button"
+                android:fontFamily="sans-serif-black"
                 android:text="CHANGE GAME VERSION"
-                android:textColor="@color/primary"
-                android:textSize="14sp"
-                android:textStyle="bold"
+                android:textColor="@color/onecore_gold"
+                android:textSize="12sp"
                 app:backgroundTint="@null"
-                android:background="@drawable/bg_glass_card_white"
-                app:cornerRadius="16dp"
-                app:icon="@drawable/arrow_drop_down"
-                app:iconGravity="textEnd"
-                app:iconTint="@color/primary" />
+                app:cornerRadius="18dp" />
 
-            <!-- Device Info Row -->
             <TextView
                 android:id="@+id/device_info"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
+                android:background="@drawable/onecore_surface_soft"
+                android:fontFamily="monospace"
                 android:gravity="center"
-                android:text="Device Info (Tap to copy HWID)"
-                android:textColor="#64748B"
-                android:textSize="12sp" />
+                android:padding="14dp"
+                android:text="Device identity • tap to copy"
+                android:textColor="@color/onecore_text_secondary"
+                android:textSize="11sp" />
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -356,45 +367,76 @@
                     android:layout_width="0dp"
                     android:layout_height="56dp"
                     android:layout_weight="1"
-                    android:layout_marginEnd="8dp"
+                    android:layout_marginEnd="7dp"
+                    android:background="@drawable/onecore_outline_button"
+                    android:fontFamily="sans-serif-black"
                     android:text="LOGOUT"
-                    android:textColor="#EF4444"
-                    android:textSize="14sp"
-                    android:textStyle="bold"
+                    android:textColor="@color/onecore_danger"
+                    android:textSize="12sp"
                     app:backgroundTint="@null"
-                    android:background="@drawable/bg_logout_premium"
-                    app:cornerRadius="16dp" />
+                    app:cornerRadius="18dp" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/clear_data"
                     android:layout_width="0dp"
                     android:layout_height="56dp"
                     android:layout_weight="1"
-                    android:layout_marginStart="8dp"
+                    android:layout_marginStart="7dp"
+                    android:background="@drawable/onecore_outline_button"
+                    android:fontFamily="sans-serif-black"
                     android:text="RESET"
-                    android:textColor="#64748B"
-                    android:textSize="14sp"
-                    android:textStyle="bold"
+                    android:textColor="@color/onecore_gold"
+                    android:textSize="12sp"
                     app:backgroundTint="@null"
-                    android:background="@drawable/bg_reset_premium"
-                    app:cornerRadius="16dp" />
+                    app:cornerRadius="18dp" />
             </LinearLayout>
 
-            <!-- Hidden Views -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:background="@drawable/onecore_surface_soft"
+                android:orientation="vertical"
+                android:padding="15dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="sans-serif-black"
+                    android:text="Security Status"
+                    android:textColor="@color/onecore_text"
+                    android:textSize="15sp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="7dp"
+                    android:text="● Signed APK   ● Encrypted vault   ● Pinned HTTPS"
+                    android:textColor="@color/onecore_success"
+                    android:textSize="11sp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="Optimized for Android 7–16 and ARM64 devices."
+                    android:textColor="@color/onecore_text_secondary"
+                    android:textSize="10sp" />
+            </LinearLayout>
+
             <com.google.android.material.progressindicator.LinearProgressIndicator
                 android:id="@+id/progress"
                 android:layout_width="match_parent"
                 android:layout_height="4dp"
-                android:layout_marginTop="16dp"
+                android:layout_marginTop="12dp"
                 android:visibility="gone" />
 
             <androidx.recyclerview.widget.RecyclerView
                 android:id="@+id/recyclerview"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
+                android:layout_marginTop="12dp"
                 android:visibility="gone" />
-
         </LinearLayout>
-    </ScrollView>
-</androidx.constraintlayout.widget.ConstraintLayout>
+    </androidx.core.widget.NestedScrollView>
+</FrameLayout>

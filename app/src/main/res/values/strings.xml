@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">ZORO LAODER</string>
+    <string name="app_name">OneCore MyThos</string>
     <string name="game_list">List of Games</string>
     <string name="sign_out">SIGN OUT</string>
     <string name="play_game">PLAY GAME</string>
@@ -30,31 +30,25 @@
     <string name="file_access_message">This app needs permission to access files in your device\'s storage to function properly. Please grant permission to continue.</string>
     <string name="grant_permission">Grant Permission</string>
     <string name="exit_message">Do you want to exit the application?</string>
-    
     <string name="license_jdk">was built by Sandi Praditya using a modified JDK licensed under the GNU General Public License v2.0. JDK source code and license available at: </string>
     <string name="msg_about_licensed_under">Licensed under: </string>
     <string name="title_open_source_licenses">Open source licenses</string>
-    
     <string name="please_wait">Please Wait…</string>
     <string name="Please_Login">Please Login!</string>
     <string name="login">LOGIN HERE</string>
     <string name="Telegram_Official">Telegram Official</string>
     <string name="Version">Version</string>
-    
     <string name="erorserver">Check you connection</string>
     <string name="userorgamenotregis">USER OR GAME NOT REGISTERED</string>
     <string name="expiredkey">Expired Key...</string>
-	<string name="okok">OK</string>
+    <string name="okok">OK</string>
     <string name="maxdevice">MAX DEVICE REACHED</string>
     <string name="BadParameter">Bad Parameter</string>
     <string name="MAINTENANCE">MAINTENANCE</string>
     <string name="INVALIDPARAMETER">INVALID PARAMETER</string>
     <string name="userblock">USER BLOCKED</string>
-    
-    <!-- XXPermissions -->
     <string name="app_obtain_permission_success_hint">Obtained %s successfully</string>
     <string name="app_return_activity_result_hint">Detected that you just returned from the permission settings interface</string>
-    
     <string name="no_data_mlh">No Data</string>
     <string name="tip_denial_authorization_mlh"> Permanently denied authorization, please manually grant read permission</string>
     <string name="tip_permission_failed_mlh">Permission failed to be obtained</string>
@@ -66,12 +60,11 @@
     <string name="tip_filebeanitem_select_limit_exceeded_mlh">The number of selections exceeds the limit</string>
     <string name="tip_filebeanitem_select_error_type_mlh">Wrong selection type</string>
     <string name="filebeanitem_dir_detail_mlh">Dir:%1$s  File:%2$s</string>
+    <string name="default_dialog_title_select_memory_path_mlh">Reminder</string>
     <string name="default_dialog_title_mlh">Reminder</string>
     <string name="tip_uri_authorization_permission_content_mlh">Access to the `%s` directory requires authorization.\nDo you want to authorize?</string>
     <string name="tip_dialog_get_special_permissions_mlh">Full file read and write permissions are required to run the software</string>
     <string name="tips_path_jump_error_exceeds_default_path_mlh" formatted="false">Cannot enter the %s path, has jumped to the %s path for you</string>
-    
-    <!-- ===== FLOAT LOGO STRINGS (ADD THESE) ===== -->
     <string name="esp">ESP</string>
     <string name="items">Items</string>
     <string name="enable_esp">Enable ESP</string>
@@ -94,8 +87,6 @@
     <string name="other">Other</string>
     <string name="vehicles">Vehicles</string>
     <string name="grenade_warning">Grenade Warning</string>
-    
-    <!-- ===== AIMBOT STRINGS ===== -->
     <string name="aimbot">Aimbot</string>
     <string name="bullet_track">Bullet Track</string>
     <string name="target">Target</string>
@@ -105,8 +96,6 @@
     <string name="aimbot_settings">Aimbot Settings</string>
     <string name="aimbot_ai">Ignore AI</string>
     <string name="aimbot_knocked">Ignore Knocked</string>
-    
-    <!-- ===== MAIN ACTIVITY STRINGS ===== -->
     <string name="hide_esp">Hide ESP</string>
     <string name="start_game">Start</string>
     <string name="zero">00</string>
@@ -115,12 +104,9 @@
     <string name="minute">Min</string>
     <string name="second">Sec</string>
     <string name="clear_login">Clear Login</string>
-    <string name="announcement">Welcome to DeadEye Loader</string>
+    <string name="announcement">OneCore MyThos Secure Console</string>
     <string name="architecture">ARM64</string>
-    
-    <!-- ===== LOGIN STRINGS ===== -->
     <string name="enter_key">Enter License Key</string>
     <string name="show_password">Show Password</string>
     <string name="app_version">v1.0.0</string>
-    
 </resources>
