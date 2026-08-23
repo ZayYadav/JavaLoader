@@ -8,6 +8,7 @@ apply from: '../signing.gradle'
 def envValue = { String preferred, String legacy ->
     System.getenv(preferred) ?: System.getenv(legacy) ?: ''
 }
+def productionSigningSha256 = 'B343111BBFA30ED565F9B61A52CF5B34CB2EAF0485EB8B396AB373B2ECCA53D4'
 def javaLoaderAllowedSigningSha256 = providers.gradleProperty('javaLoaderAllowedSigningSha256')
         .orElse(envValue('ONECORE_ALLOWED_SIGNING_SHA256', 'JAVA_LOADER_ALLOWED_SIGNING_SHA256'))
         .get()
@@ -70,6 +71,9 @@ if (!javaLoaderApiPublicKey.isEmpty()) {
 if (releaseTaskRequested) {
     if (javaLoaderAllowedSigningSha256.isEmpty()) {
         throw new GradleException('Signing certificate SHA-256 is required for release builds')
+    }
+    if (javaLoaderAllowedSigningSha256 != productionSigningSha256) {
+        throw new GradleException('Release signer pin must match the OneCore MyThos production certificate')
     }
     if (javaLoaderTlsPins.isEmpty()) {
         throw new GradleException('TLS pins are required for release builds')
