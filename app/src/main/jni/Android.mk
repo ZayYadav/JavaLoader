@@ -4,7 +4,7 @@ include $(CLEAR_VARS)
 
 LOCAL_MODULE := client
 
-LOCAL_SRC_FILES := Main.cpp SignatureIntegrity.cpp WrapperPayloadGuard.cpp NativeApkSignerBinding.cpp
+LOCAL_SRC_FILES := Main.cpp SignatureIntegrity.cpp WrapperPayloadGuard.cpp NativeApkSignerBinding.cpp ApkArchiveIntegrity.cpp
 
 # Only current folder include
 LOCAL_C_INCLUDES := $(LOCAL_PATH)
@@ -18,6 +18,6 @@ LOCAL_CPPFLAGS += -fno-rtti -fno-exceptions -fpermissive
 
 LOCAL_LDFLAGS := -Wl,--gc-sections,--strip-all
 
-LOCAL_LDLIBS := -llog -landroid -ldl
+LOCAL_LDLIBS := -llog -landroid -ldl -lz
 
 include $(BUILD_SHARED_LIBRARY)
