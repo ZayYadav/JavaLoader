@@ -1,4 +1,4 @@
-name: Build JavaLoader APK
+name: Build JavaLoader Release APK
 
 on:
   workflow_dispatch:
@@ -27,18 +27,19 @@ permissions:
   contents: read
 
 concurrency:
-  group: javaloader-${{ github.workflow }}-${{ github.ref }}
+  group: javaloader-release-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   build:
-    name: Build and verify APKs
+    name: Build and verify release APK
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
     env:
       NDK_VERSION: '24.0.8215888'
       BUILD_TOOLS_VERSION: '34.0.0'
+      PRODUCTION_CERT_SHA256: 'B343111BBFA30ED565F9B61A52CF5B34CB2EAF0485EB8B396AB373B2ECCA53D4'
       JAVA_LOADER_TLS_PINS: ${{ vars.JAVA_LOADER_TLS_PINS }}
       JAVA_LOADER_API_PUBLIC_KEY_B64: ${{ vars.JAVA_LOADER_API_PUBLIC_KEY_B64 }}
       JAVA_LOADER_LICENSE_URL: ${{ vars.JAVA_LOADER_LICENSE_URL }}
@@ -73,11 +74,11 @@ jobs:
           printf 'sdk.dir=%s\n' "$ANDROID_HOME" > local.properties
           chmod +x gradlew
 
-      - name: Configure isolated signing identity
+      - name: Configure release signing identity
         shell: bash
         run: |
           set -euo pipefail
-          KEYSTORE="$RUNNER_TEMP/javaloader-build.jks"
+          KEYSTORE="$RUNNER_TEMP/javaloader-release.jks"
 
           if [ -n "${ANDROID_KEYSTORE_BASE64:-}" ] \
             && [ -n "${RELEASE_STORE_PASSWORD:-}" ] \
@@ -89,10 +90,12 @@ jobs:
             KEY_PASSWORD="$RELEASE_KEY_PASSWORD"
             ARTIFACT_TIER='production-signing'
           else
+            # Compile-only signer. The resulting APK intentionally cannot pass the hard-coded
+            # runtime production pin and must never be distributed as production.
             STORE_PASSWORD='javaloader-ci-only'
             KEY_ALIAS='javaloader-ci'
             KEY_PASSWORD='javaloader-ci-only'
-            ARTIFACT_TIER='ci-test-signing'
+            ARTIFACT_TIER='ci-compile-only'
             keytool -genkeypair \
               -keystore "$KEYSTORE" \
               -storetype JKS \
@@ -102,7 +105,7 @@ jobs:
               -keyalg RSA \
               -keysize 2048 \
               -validity 3650 \
-              -dname 'CN=JavaLoader CI,O=Parallax,C=IN'
+              -dname 'CN=JavaLoader CI Compile Only,O=Parallax,C=IN'
           fi
 
           test -s "$KEYSTORE"
@@ -111,19 +114,27 @@ jobs:
             -storepass "$STORE_PASSWORD" \
             -alias "$KEY_ALIAS" \
             -file "$RUNNER_TEMP/javaloader-cert.der"
-          CERT_SHA256=$(sha256sum "$RUNNER_TEMP/javaloader-cert.der" | awk '{print toupper($1)}')
-          test "${#CERT_SHA256}" -eq 64
+          ACTUAL_CERT_SHA256=$(sha256sum "$RUNNER_TEMP/javaloader-cert.der" | awk '{print toupper($1)}')
+          test "${#ACTUAL_CERT_SHA256}" -eq 64
+
+          if [ "$ARTIFACT_TIER" = 'production-signing' ] \
+            && [ "$ACTUAL_CERT_SHA256" != "$PRODUCTION_CERT_SHA256" ]; then
+            echo "::error::Configured production keystore does not match the pinned OneCore MyThos certificate"
+            exit 1
+          fi
 
           {
             echo "STORE_FILE=$KEYSTORE"
             echo "STORE_PASSWORD=$STORE_PASSWORD"
             echo "KEY_ALIAS=$KEY_ALIAS"
             echo "KEY_PASSWORD=$KEY_PASSWORD"
-            echo "JAVA_LOADER_ALLOWED_SIGNING_SHA256=$CERT_SHA256"
+            echo "JAVA_LOADER_ALLOWED_SIGNING_SHA256=$PRODUCTION_CERT_SHA256"
+            echo "JAVA_LOADER_ACTUAL_SIGNING_SHA256=$ACTUAL_CERT_SHA256"
             echo "JAVA_LOADER_ARTIFACT_TIER=$ARTIFACT_TIER"
           } >> "$GITHUB_ENV"
 
-          echo "Build certificate SHA-256: $CERT_SHA256"
+          echo "Pinned production certificate SHA-256: $PRODUCTION_CERT_SHA256"
+          echo "Actual build certificate SHA-256: $ACTUAL_CERT_SHA256"
           echo "Artifact tier: $ARTIFACT_TIER"
 
       - name: Configure licensing build identity
@@ -145,7 +156,7 @@ jobs:
               JAVA_LOADER_TLS_PINS="sha256/${PIN}"
             fi
             if [ -z "${JAVA_LOADER_LICENSE_URL:-}" ]; then
-              JAVA_LOADER_LICENSE_URL='https://invalid.example/connect.php'
+              JAVA_LOADER_LICENSE_URL='https://invalid.example/api/v2/connect'
             fi
           fi
 
@@ -160,9 +171,6 @@ jobs:
             echo "JAVA_LOADER_GAME_ID=$JAVA_LOADER_GAME_ID"
           } >> "$GITHUB_ENV"
 
-          echo "License host: $(printf '%s' "$JAVA_LOADER_LICENSE_URL" | sed -E 's#https://([^/]+)/.*#\1#')"
-          echo "Game id: $JAVA_LOADER_GAME_ID"
-
       - name: Validate Gradle project
         shell: bash
         run: |
@@ -170,32 +178,43 @@ jobs:
           ./gradlew --version
           ./gradlew :app:tasks --no-daemon >/dev/null
 
-      - name: Build debug and release APKs
+      - name: Build release APK only
         shell: bash
         run: |
           set -o pipefail
           mkdir -p build-logs
-          ./gradlew :app:assembleDebug :app:assembleRelease \
+          ./gradlew :app:assembleRelease \
             --no-daemon --stacktrace \
             2>&1 | tee build-logs/gradle-build.log
 
-      - name: Verify APK structure and signatures
+      - name: Verify release APK structure and signature
         shell: bash
         run: |
           set -euo pipefail
-          APKS=$(find app/build/outputs/apk -type f -name '*.apk' -print)
-          test -n "$APKS"
+          RELEASE_APK=$(find app/build/outputs/apk/release -type f -name '*.apk' -print -quit)
+          test -n "$RELEASE_APK"
 
-          : > build-logs/apk-verification.txt
-          while IFS= read -r apk; do
-            echo "== $apk ==" | tee -a build-logs/apk-verification.txt
-            unzip -tq "$apk"
-            "$ANDROID_HOME/build-tools/$BUILD_TOOLS_VERSION/apksigner" verify \
-              --verbose --print-certs "$apk" \
-              | tee -a build-logs/apk-verification.txt
-            "$ANDROID_HOME/build-tools/$BUILD_TOOLS_VERSION/zipalign" -c -v 4 "$apk" >/dev/null
-            sha256sum "$apk" | tee -a build-logs/apk-verification.txt
-          done <<< "$APKS"
+          unzip -tq "$RELEASE_APK"
+          "$ANDROID_HOME/build-tools/$BUILD_TOOLS_VERSION/apksigner" verify \
+            --verbose --print-certs "$RELEASE_APK" \
+            | tee build-logs/apk-verification.txt
+          "$ANDROID_HOME/build-tools/$BUILD_TOOLS_VERSION/zipalign" -c -v 4 "$RELEASE_APK" >/dev/null
+          sha256sum "$RELEASE_APK" | tee -a build-logs/apk-verification.txt
+
+          APKSIG_CERT_SHA256=$("$ANDROID_HOME/build-tools/$BUILD_TOOLS_VERSION/apksigner" verify \
+            --print-certs "$RELEASE_APK" \
+            | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' \
+            | tr -d ':' \
+            | tr '[:lower:]' '[:upper:]' \
+            | head -n1)
+          test -n "$APKSIG_CERT_SHA256"
+          test "$APKSIG_CERT_SHA256" = "$JAVA_LOADER_ACTUAL_SIGNING_SHA256"
+
+          if [ "$JAVA_LOADER_ARTIFACT_TIER" = 'production-signing' ]; then
+            test "$APKSIG_CERT_SHA256" = "$PRODUCTION_CERT_SHA256"
+          else
+            echo 'CI compile-only APK is intentionally not production-runnable because its signer differs from the native pin.'
+          fi
 
       - name: Check release APK for accidental secret files
         shell: bash
@@ -217,7 +236,8 @@ jobs:
             echo "commit=$GITHUB_SHA"
             echo "ndk=$NDK_VERSION"
             echo "build_tools=$BUILD_TOOLS_VERSION"
-            echo "tls_pinning=configured"
+            echo "pinned_production_cert_sha256=$PRODUCTION_CERT_SHA256"
+            echo "actual_build_cert_sha256=$JAVA_LOADER_ACTUAL_SIGNING_SHA256"
             echo "license_url=$JAVA_LOADER_LICENSE_URL"
             echo "game_id=$JAVA_LOADER_GAME_ID"
           } | tee build-logs/build-metadata.txt
@@ -229,17 +249,10 @@ jobs:
           path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
 
-      - name: Upload debug APK
-        uses: actions/upload-artifact@v6
-        with:
-          name: javaloader-${{ env.JAVA_LOADER_ARTIFACT_TIER }}-debug
-          path: app/build/outputs/apk/debug/*.apk
-          if-no-files-found: error
-
       - name: Upload build logs
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: javaloader-build-logs
+          name: javaloader-release-build-logs
           path: build-logs/
           if-no-files-found: warn
