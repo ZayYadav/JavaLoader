@@ -16,6 +16,7 @@ import com.pubgm.activity.SplashActivity;
 import com.pubgm.security.AdvancedIntegrityGuard;
 import com.pubgm.security.IntegrityWatchdog;
 import com.pubgm.security.ParallaxBhaiServerSeAaya;
+import com.pubgm.security.ProductionSignerGuard;
 import com.pubgm.security.SecurityIncidentActivity;
 import com.pubgm.security.SecurityIncidentDispatcher;
 import com.pubgm.utils.FLog;
@@ -28,6 +29,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @Obfuscate
 public class BoxApplication extends Application {
     public static BoxApplication gApp;
+    private static volatile String earlyProductionSignerFailure;
     private final AtomicBoolean redirectingToLogin = new AtomicBoolean(false);
 
     public static BoxApplication get() {
@@ -37,6 +39,11 @@ public class BoxApplication extends Application {
     @Override
     protected void attachBaseContext(Context base) {
         super.attachBaseContext(base);
+        ProductionSignerGuard.Verification early = ProductionSignerGuard.verifyEarly(base);
+        if (!early.isValid()) {
+            earlyProductionSignerFailure =
+                    "PRODUCTION_SIGNER:" + early.status().name() + ":" + early.detail();
+        }
     }
 
     @Override
@@ -61,6 +68,15 @@ public class BoxApplication extends Application {
             public void onActivityStarted(Activity activity) {
                 if (activity instanceof SecurityIncidentActivity) return;
                 SecurityIncidentDispatcher.attach(activity);
+
+                ProductionSignerGuard.Verification production = ProductionSignerGuard.verifyFull(activity);
+                if (!production.isValid()) {
+                    SecurityIncidentDispatcher.raise(
+                            activity,
+                            SecurityIncidentDispatcher.Reason.SIGNATURE,
+                            "PRODUCTION_SIGNER:" + production.status().name() + ":" + production.detail());
+                    return;
+                }
 
                 AdvancedIntegrityGuard.Verification integrity =
                         AdvancedIntegrityGuard.verifyDetailed(activity);
@@ -100,6 +116,17 @@ public class BoxApplication extends Application {
             public void onActivityResumed(Activity activity) {
                 if (activity instanceof SecurityIncidentActivity) return;
                 SecurityIncidentDispatcher.attach(activity);
+
+                ProductionSignerGuard.Verification production = ProductionSignerGuard.verifyEarly(activity);
+                if (!production.isValid()) {
+                    SecurityIncidentDispatcher.raise(
+                            activity,
+                            SecurityIncidentDispatcher.Reason.SIGNATURE,
+                            "PRODUCTION_SIGNER_RUNTIME:" + production.status().name()
+                                    + ":" + production.detail());
+                    return;
+                }
+
                 if (!AdvancedIntegrityGuard.verifyRuntimeBinding(activity)) {
                     SecurityIncidentDispatcher.raise(
                             activity,
@@ -123,12 +150,29 @@ public class BoxApplication extends Application {
             }
         });
 
-        AdvancedIntegrityGuard.Verification startup = AdvancedIntegrityGuard.verifyDetailed(this);
-        if (!startup.isValid()) {
+        String earlyFailure = earlyProductionSignerFailure;
+        if (earlyFailure != null && !earlyFailure.isEmpty()) {
             SecurityIncidentDispatcher.raiseFromContext(
                     this,
                     SecurityIncidentDispatcher.Reason.SIGNATURE,
-                    startup.status().name() + ":" + startup.detail());
+                    earlyFailure);
+        } else {
+            ProductionSignerGuard.Verification productionStartup = ProductionSignerGuard.verifyFull(this);
+            if (!productionStartup.isValid()) {
+                SecurityIncidentDispatcher.raiseFromContext(
+                        this,
+                        SecurityIncidentDispatcher.Reason.SIGNATURE,
+                        "PRODUCTION_SIGNER_STARTUP:" + productionStartup.status().name()
+                                + ":" + productionStartup.detail());
+            } else {
+                AdvancedIntegrityGuard.Verification startup = AdvancedIntegrityGuard.verifyDetailed(this);
+                if (!startup.isValid()) {
+                    SecurityIncidentDispatcher.raiseFromContext(
+                            this,
+                            SecurityIncidentDispatcher.Reason.SIGNATURE,
+                            startup.status().name() + ":" + startup.detail());
+                }
+            }
         }
         IntegrityWatchdog.start(this);
 
