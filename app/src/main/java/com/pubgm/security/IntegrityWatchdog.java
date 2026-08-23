@@ -38,11 +38,28 @@ public final class IntegrityWatchdog {
         if (INCIDENT.get()) return;
         try {
             int tick = TICKS.incrementAndGet();
+
+            ProductionSignerGuard.Verification pinned = ProductionSignerGuard.verifyEarly(context);
+            if (!pinned.isValid()) {
+                trigger(context, "PRODUCTION_SIGNER_RUNTIME:" + pinned.status().name()
+                        + ":" + pinned.detail());
+                return;
+            }
+
             if (!AdvancedIntegrityGuard.verifyRuntimeBinding(context)) {
                 trigger(context, "RUNTIME_APK_BINDING");
                 return;
             }
+
             if ((tick & 7) == 0) {
+                ProductionSignerGuard.Verification productionFull =
+                        ProductionSignerGuard.verifyFull(context);
+                if (!productionFull.isValid()) {
+                    trigger(context, "PRODUCTION_SIGNER_FULL:" + productionFull.status().name()
+                            + ":" + productionFull.detail());
+                    return;
+                }
+
                 AdvancedIntegrityGuard.Verification full = AdvancedIntegrityGuard.verifyDetailed(context);
                 if (!full.isValid()) {
                     trigger(context, full.status().name() + ":" + full.detail());
