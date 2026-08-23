@@ -85,25 +85,8 @@ if (releaseTaskRequested) {
     }
 }
 
-// OneCore-style string protection is intentionally limited to auth/security code. Existing
-// gameplay/native packages are excluded so the hardening pass does not alter or conceal them.
-def oneCoreAuthStringFilter = { String className ->
-    (className.startsWith('com.pubgm.security.')
-            || className == 'com.pubgm.Login'
-            || className.startsWith('com.pubgm.activity.LoginActivity'))
-            && className != 'com.pubgm.BuildConfig'
-            && className != 'com.pubgm.R'
-            && !className.startsWith('com.pubgm.R$')
-}.dehydrate()
-
-lsparanoid {
-    seed = 0x4F4E4543
-    includeDependencies = false
-    classFilter = oneCoreAuthStringFilter
-    variantFilter = { variant ->
-        variant.buildType == 'release'
-    }
-}
+// LSParanoid stays annotation-driven. Security/auth classes already carry @Obfuscate;
+// no unsupported global class filter is used, and unrelated native/gameplay packages stay untouched.
 
 android {
     namespace "com.pubgm"
