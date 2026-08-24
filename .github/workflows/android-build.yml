@@ -1,4 +1,4 @@
-name: Build JavaLoader Release APK
+name: OneCore MyThos Release
 
 on:
   workflow_dispatch:
@@ -27,19 +27,157 @@ permissions:
   contents: read
 
 concurrency:
-  group: javaloader-release-${{ github.workflow }}-${{ github.ref }}
+  group: onecore-mythos-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  NDK_VERSION: '24.0.8215888'
+  BUILD_TOOLS_VERSION: '34.0.0'
+  PRODUCTION_CERT_SHA256: 'B343111BBFA30ED565F9B61A52CF5B34CB2EAF0485EB8B396AB373B2ECCA53D4'
+  PRODUCTION_KEY_ALIAS: 'onecore-mythos-prod'
+
 jobs:
-  build:
-    name: Build and verify release APK
+  pr-compile-check:
+    if: github.event_name == 'pull_request'
+    name: PR release compile check (non-distributable)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Install Android packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager --install \
+            'platforms;android-34' \
+            "build-tools;${BUILD_TOOLS_VERSION}" \
+            "ndk;${NDK_VERSION}"
+          printf 'sdk.dir=%s\n' "$ANDROID_HOME" > local.properties
+          chmod +x gradlew
+
+      - name: Configure isolated compile-only signer
+        shell: bash
+        run: |
+          set -euo pipefail
+          KEYSTORE="$RUNNER_TEMP/onecore-pr-compile-only.jks"
+          STORE_PASSWORD='onecore-pr-compile-only'
+          KEY_ALIAS='onecore-pr-compile-only'
+          KEY_PASSWORD='onecore-pr-compile-only'
+
+          keytool -genkeypair \
+            -keystore "$KEYSTORE" \
+            -storetype JKS \
+            -storepass "$STORE_PASSWORD" \
+            -keypass "$KEY_PASSWORD" \
+            -alias "$KEY_ALIAS" \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 30 \
+            -dname 'CN=NON DISTRIBUTABLE PR COMPILE CHECK,O=Parallax,C=IN'
+
+          keytool -exportcert \
+            -keystore "$KEYSTORE" \
+            -storepass "$STORE_PASSWORD" \
+            -alias "$KEY_ALIAS" \
+            -file "$RUNNER_TEMP/pr-cert.der"
+          ACTUAL_CERT_SHA256=$(sha256sum "$RUNNER_TEMP/pr-cert.der" | awk '{print toupper($1)}')
+          test "$ACTUAL_CERT_SHA256" != "$PRODUCTION_CERT_SHA256"
+
+          {
+            echo "STORE_FILE=$KEYSTORE"
+            echo "STORE_PASSWORD=$STORE_PASSWORD"
+            echo "KEY_ALIAS=$KEY_ALIAS"
+            echo "KEY_PASSWORD=$KEY_PASSWORD"
+            echo "JAVA_LOADER_ALLOWED_SIGNING_SHA256=$PRODUCTION_CERT_SHA256"
+            echo "JAVA_LOADER_ACTUAL_SIGNING_SHA256=$ACTUAL_CERT_SHA256"
+          } >> "$GITHUB_ENV"
+
+      - name: Configure compile-only licensing placeholders
+        shell: bash
+        run: |
+          set -euo pipefail
+          openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 \
+            -out "$RUNNER_TEMP/ci-license-private.pem" >/dev/null 2>&1
+          CI_API_KEY=$(openssl pkey -in "$RUNNER_TEMP/ci-license-private.pem" \
+            -pubout -outform DER 2>/dev/null | base64 -w0)
+          CI_PIN=$(printf 'onecore-pr-compile-only-pin' | openssl dgst -sha256 -binary | base64 -w0)
+          {
+            echo "JAVA_LOADER_API_PUBLIC_KEY_B64=$CI_API_KEY"
+            echo "JAVA_LOADER_TLS_PINS=sha256/$CI_PIN"
+            echo "JAVA_LOADER_LICENSE_URL=https://invalid.example/api/v2/connect"
+            echo "JAVA_LOADER_GAME_ID=PUBG"
+          } >> "$GITHUB_ENV"
+
+      - name: Validate Gradle project
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./gradlew --version
+          ./gradlew :app:tasks --no-daemon >/dev/null
+
+      - name: Compile release configuration
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p build-logs
+          ./gradlew :app:assembleRelease --no-daemon --stacktrace \
+            2>&1 | tee build-logs/gradle-build.log
+
+      - name: Verify compile-check APK then destroy it
+        shell: bash
+        run: |
+          set -euo pipefail
+          RELEASE_APK=$(find app/build/outputs/apk/release -type f -name '*.apk' -print -quit)
+          test -n "$RELEASE_APK"
+          unzip -tq "$RELEASE_APK"
+          OUTPUT=$("$ANDROID_HOME/build-tools/$BUILD_TOOLS_VERSION/apksigner" verify \
+            --verbose --print-certs "$RELEASE_APK")
+          printf '%s\n' "$OUTPUT" | tee build-logs/apk-verification.txt
+          "$ANDROID_HOME/build-tools/$BUILD_TOOLS_VERSION/zipalign" -c -v 4 "$RELEASE_APK" >/dev/null
+
+          APKSIG_CERT_SHA256=$(printf '%s\n' "$OUTPUT" \
+            | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' \
+            | tr -d ':' | tr '[:lower:]' '[:upper:]' | head -n1)
+          test -n "$APKSIG_CERT_SHA256"
+          test "$APKSIG_CERT_SHA256" = "$JAVA_LOADER_ACTUAL_SIGNING_SHA256"
+          test "$APKSIG_CERT_SHA256" != "$PRODUCTION_CERT_SHA256"
+
+          printf 'NON_DISTRIBUTABLE=true\nactual_compile_signer=%s\npinned_production_signer=%s\n' \
+            "$APKSIG_CERT_SHA256" "$PRODUCTION_CERT_SHA256" \
+            > build-logs/compile-check-metadata.txt
+
+          # Never expose the temporary PR-signed APK as a downloadable artifact.
+          rm -f "$RELEASE_APK"
+
+      - name: Upload PR compile logs only
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: onecore-mythos-pr-compile-logs
+          path: build-logs/
+          if-no-files-found: warn
+          retention-days: 14
+
+  production-release:
+    if: github.event_name != 'pull_request'
+    name: Production-signed release APK
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
     env:
-      NDK_VERSION: '24.0.8215888'
-      BUILD_TOOLS_VERSION: '34.0.0'
-      PRODUCTION_CERT_SHA256: 'B343111BBFA30ED565F9B61A52CF5B34CB2EAF0485EB8B396AB373B2ECCA53D4'
       JAVA_LOADER_TLS_PINS: ${{ vars.JAVA_LOADER_TLS_PINS }}
       JAVA_LOADER_API_PUBLIC_KEY_B64: ${{ vars.JAVA_LOADER_API_PUBLIC_KEY_B64 }}
       JAVA_LOADER_LICENSE_URL: ${{ vars.JAVA_LOADER_LICENSE_URL }}
@@ -74,96 +212,57 @@ jobs:
           printf 'sdk.dir=%s\n' "$ANDROID_HOME" > local.properties
           chmod +x gradlew
 
-      - name: Configure release signing identity
+      - name: Require and verify production keystore
         shell: bash
         run: |
           set -euo pipefail
-          KEYSTORE="$RUNNER_TEMP/javaloader-release.jks"
+          test -n "${ANDROID_KEYSTORE_BASE64:-}" || { echo '::error::ANDROID_KEYSTORE_BASE64 secret is required'; exit 1; }
+          test -n "${RELEASE_STORE_PASSWORD:-}" || { echo '::error::ANDROID_KEYSTORE_PASSWORD secret is required'; exit 1; }
+          test -n "${RELEASE_KEY_ALIAS:-}" || { echo '::error::ANDROID_KEY_ALIAS secret is required'; exit 1; }
+          test -n "${RELEASE_KEY_PASSWORD:-}" || { echo '::error::ANDROID_KEY_PASSWORD secret is required'; exit 1; }
+          test "$RELEASE_KEY_ALIAS" = "$PRODUCTION_KEY_ALIAS" || { echo '::error::Wrong production key alias'; exit 1; }
 
-          if [ -n "${ANDROID_KEYSTORE_BASE64:-}" ] \
-            && [ -n "${RELEASE_STORE_PASSWORD:-}" ] \
-            && [ -n "${RELEASE_KEY_ALIAS:-}" ] \
-            && [ -n "${RELEASE_KEY_PASSWORD:-}" ]; then
-            printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE"
-            STORE_PASSWORD="$RELEASE_STORE_PASSWORD"
-            KEY_ALIAS="$RELEASE_KEY_ALIAS"
-            KEY_PASSWORD="$RELEASE_KEY_PASSWORD"
-            ARTIFACT_TIER='production-signing'
-          else
-            # Compile-only signer. The resulting APK intentionally cannot pass the hard-coded
-            # runtime production pin and must never be distributed as production.
-            STORE_PASSWORD='javaloader-ci-only'
-            KEY_ALIAS='javaloader-ci'
-            KEY_PASSWORD='javaloader-ci-only'
-            ARTIFACT_TIER='ci-compile-only'
-            keytool -genkeypair \
-              -keystore "$KEYSTORE" \
-              -storetype JKS \
-              -storepass "$STORE_PASSWORD" \
-              -keypass "$KEY_PASSWORD" \
-              -alias "$KEY_ALIAS" \
-              -keyalg RSA \
-              -keysize 2048 \
-              -validity 3650 \
-              -dname 'CN=JavaLoader CI Compile Only,O=Parallax,C=IN'
-          fi
-
+          KEYSTORE="$RUNNER_TEMP/onecore-mythos-production.jks"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE"
           test -s "$KEYSTORE"
+
+          # This also validates store password + alias before Gradle sees the key.
           keytool -exportcert \
             -keystore "$KEYSTORE" \
-            -storepass "$STORE_PASSWORD" \
-            -alias "$KEY_ALIAS" \
-            -file "$RUNNER_TEMP/javaloader-cert.der"
-          ACTUAL_CERT_SHA256=$(sha256sum "$RUNNER_TEMP/javaloader-cert.der" | awk '{print toupper($1)}')
+            -storepass "$RELEASE_STORE_PASSWORD" \
+            -alias "$RELEASE_KEY_ALIAS" \
+            -file "$RUNNER_TEMP/production-cert.der"
+          ACTUAL_CERT_SHA256=$(sha256sum "$RUNNER_TEMP/production-cert.der" | awk '{print toupper($1)}')
           test "${#ACTUAL_CERT_SHA256}" -eq 64
-
-          if [ "$ARTIFACT_TIER" = 'production-signing' ] \
-            && [ "$ACTUAL_CERT_SHA256" != "$PRODUCTION_CERT_SHA256" ]; then
-            echo "::error::Configured production keystore does not match the pinned OneCore MyThos certificate"
+          test "$ACTUAL_CERT_SHA256" = "$PRODUCTION_CERT_SHA256" || {
+            echo '::error::Production keystore certificate does not match the native/Java pinned certificate'
             exit 1
-          fi
+          }
 
           {
             echo "STORE_FILE=$KEYSTORE"
-            echo "STORE_PASSWORD=$STORE_PASSWORD"
-            echo "KEY_ALIAS=$KEY_ALIAS"
-            echo "KEY_PASSWORD=$KEY_PASSWORD"
+            echo "STORE_PASSWORD=$RELEASE_STORE_PASSWORD"
+            echo "KEY_ALIAS=$RELEASE_KEY_ALIAS"
+            echo "KEY_PASSWORD=$RELEASE_KEY_PASSWORD"
             echo "JAVA_LOADER_ALLOWED_SIGNING_SHA256=$PRODUCTION_CERT_SHA256"
-            echo "JAVA_LOADER_ACTUAL_SIGNING_SHA256=$ACTUAL_CERT_SHA256"
-            echo "JAVA_LOADER_ARTIFACT_TIER=$ARTIFACT_TIER"
           } >> "$GITHUB_ENV"
 
-          echo "Pinned production certificate SHA-256: $PRODUCTION_CERT_SHA256"
-          echo "Actual build certificate SHA-256: $ACTUAL_CERT_SHA256"
-          echo "Artifact tier: $ARTIFACT_TIER"
+          echo "Production keystore certificate verified: $PRODUCTION_CERT_SHA256"
 
-      - name: Configure licensing build identity
+      - name: Require production licensing configuration
         shell: bash
         run: |
           set -euo pipefail
-
-          if [ "$JAVA_LOADER_ARTIFACT_TIER" = 'production-signing' ]; then
-            test -n "${JAVA_LOADER_TLS_PINS:-}" || { echo '::error::JAVA_LOADER_TLS_PINS repository variable is required for production signing'; exit 1; }
-            test -n "${JAVA_LOADER_API_PUBLIC_KEY_B64:-}" || { echo '::error::JAVA_LOADER_API_PUBLIC_KEY_B64 repository variable is required for production signing'; exit 1; }
-            test -n "${JAVA_LOADER_LICENSE_URL:-}" || { echo '::error::JAVA_LOADER_LICENSE_URL repository variable is required for production signing'; exit 1; }
-          else
-            if [ -z "${JAVA_LOADER_API_PUBLIC_KEY_B64:-}" ]; then
-              openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$RUNNER_TEMP/ci-license-private.pem" >/dev/null 2>&1
-              JAVA_LOADER_API_PUBLIC_KEY_B64=$(openssl pkey -in "$RUNNER_TEMP/ci-license-private.pem" -pubout -outform DER 2>/dev/null | base64 -w0)
-            fi
-            if [ -z "${JAVA_LOADER_TLS_PINS:-}" ]; then
-              PIN=$(printf 'javaloader-ci-placeholder-pin' | openssl dgst -sha256 -binary | base64 -w0)
-              JAVA_LOADER_TLS_PINS="sha256/${PIN}"
-            fi
-            if [ -z "${JAVA_LOADER_LICENSE_URL:-}" ]; then
-              JAVA_LOADER_LICENSE_URL='https://invalid.example/api/v2/connect'
-            fi
-          fi
-
+          test -n "${JAVA_LOADER_TLS_PINS:-}" || { echo '::error::JAVA_LOADER_TLS_PINS repository variable is required'; exit 1; }
+          test -n "${JAVA_LOADER_API_PUBLIC_KEY_B64:-}" || { echo '::error::JAVA_LOADER_API_PUBLIC_KEY_B64 repository variable is required'; exit 1; }
+          test -n "${JAVA_LOADER_LICENSE_URL:-}" || { echo '::error::JAVA_LOADER_LICENSE_URL repository variable is required'; exit 1; }
+          case "$JAVA_LOADER_LICENSE_URL" in
+            https://*/api/v2/connect) ;;
+            *) echo '::error::JAVA_LOADER_LICENSE_URL must be the HTTPS /api/v2/connect endpoint'; exit 1 ;;
+          esac
           if [ -z "${JAVA_LOADER_GAME_ID:-}" ]; then
             JAVA_LOADER_GAME_ID='PUBG'
           fi
-
           {
             echo "JAVA_LOADER_API_PUBLIC_KEY_B64=$JAVA_LOADER_API_PUBLIC_KEY_B64"
             echo "JAVA_LOADER_TLS_PINS=$JAVA_LOADER_TLS_PINS"
@@ -178,81 +277,69 @@ jobs:
           ./gradlew --version
           ./gradlew :app:tasks --no-daemon >/dev/null
 
-      - name: Build release APK only
+      - name: Build production release APK only
         shell: bash
         run: |
           set -o pipefail
           mkdir -p build-logs
-          ./gradlew :app:assembleRelease \
-            --no-daemon --stacktrace \
+          ./gradlew :app:assembleRelease --no-daemon --stacktrace \
             2>&1 | tee build-logs/gradle-build.log
 
-      - name: Verify release APK structure and signature
+      - name: Verify final production APK signer
         shell: bash
         run: |
           set -euo pipefail
           RELEASE_APK=$(find app/build/outputs/apk/release -type f -name '*.apk' -print -quit)
           test -n "$RELEASE_APK"
-
           unzip -tq "$RELEASE_APK"
-          "$ANDROID_HOME/build-tools/$BUILD_TOOLS_VERSION/apksigner" verify \
-            --verbose --print-certs "$RELEASE_APK" \
-            | tee build-logs/apk-verification.txt
+
+          OUTPUT=$("$ANDROID_HOME/build-tools/$BUILD_TOOLS_VERSION/apksigner" verify \
+            --verbose --print-certs "$RELEASE_APK")
+          printf '%s\n' "$OUTPUT" | tee build-logs/apk-verification.txt
+          printf '%s\n' "$OUTPUT" | grep -Eq 'Verified using v2 scheme.*: true'
           "$ANDROID_HOME/build-tools/$BUILD_TOOLS_VERSION/zipalign" -c -v 4 "$RELEASE_APK" >/dev/null
-          sha256sum "$RELEASE_APK" | tee -a build-logs/apk-verification.txt
 
-          APKSIG_CERT_SHA256=$("$ANDROID_HOME/build-tools/$BUILD_TOOLS_VERSION/apksigner" verify \
-            --print-certs "$RELEASE_APK" \
+          APKSIG_CERT_SHA256=$(printf '%s\n' "$OUTPUT" \
             | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' \
-            | tr -d ':' \
-            | tr '[:lower:]' '[:upper:]' \
-            | head -n1)
-          test -n "$APKSIG_CERT_SHA256"
-          test "$APKSIG_CERT_SHA256" = "$JAVA_LOADER_ACTUAL_SIGNING_SHA256"
+            | tr -d ':' | tr '[:lower:]' '[:upper:]' | head -n1)
+          test "$APKSIG_CERT_SHA256" = "$PRODUCTION_CERT_SHA256" || {
+            echo "::error::Built APK is NOT signed by OneCore MyThos production key"
+            exit 1
+          }
 
-          if [ "$JAVA_LOADER_ARTIFACT_TIER" = 'production-signing' ]; then
-            test "$APKSIG_CERT_SHA256" = "$PRODUCTION_CERT_SHA256"
-          else
-            echo 'CI compile-only APK is intentionally not production-runnable because its signer differs from the native pin.'
-          fi
+          APK_SHA256=$(sha256sum "$RELEASE_APK" | awk '{print toupper($1)}')
+          APK_SIZE=$(stat -c '%s' "$RELEASE_APK")
+          {
+            echo "production_cert_sha256=$APKSIG_CERT_SHA256"
+            echo "apk_sha256=$APK_SHA256"
+            echo "apk_size=$APK_SIZE"
+            echo "commit=$GITHUB_SHA"
+          } | tee build-logs/production-release-metadata.txt
 
-      - name: Check release APK for accidental secret files
+      - name: Check production APK for accidental secret files
         shell: bash
         run: |
           set -euo pipefail
           RELEASE_APK=$(find app/build/outputs/apk/release -type f -name '*.apk' -print -quit)
           test -n "$RELEASE_APK"
           if unzip -l "$RELEASE_APK" | grep -E 'signing\.properties|local\.properties|\.jks|\.keystore|private\.pem'; then
-            echo 'Local/signing secret file found inside APK' >&2
+            echo '::error::Local/signing secret file found inside APK'
             exit 1
           fi
 
-      - name: Record build metadata
-        shell: bash
-        run: |
-          set -euo pipefail
-          {
-            echo "artifact_tier=$JAVA_LOADER_ARTIFACT_TIER"
-            echo "commit=$GITHUB_SHA"
-            echo "ndk=$NDK_VERSION"
-            echo "build_tools=$BUILD_TOOLS_VERSION"
-            echo "pinned_production_cert_sha256=$PRODUCTION_CERT_SHA256"
-            echo "actual_build_cert_sha256=$JAVA_LOADER_ACTUAL_SIGNING_SHA256"
-            echo "license_url=$JAVA_LOADER_LICENSE_URL"
-            echo "game_id=$JAVA_LOADER_GAME_ID"
-          } | tee build-logs/build-metadata.txt
-
-      - name: Upload release APK
+      - name: Upload verified production APK
         uses: actions/upload-artifact@v6
         with:
-          name: javaloader-${{ env.JAVA_LOADER_ARTIFACT_TIER }}-release
+          name: onecore-mythos-production-release
           path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
+          retention-days: 30
 
-      - name: Upload build logs
+      - name: Upload production build logs
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: javaloader-release-build-logs
+          name: onecore-mythos-production-build-logs
           path: build-logs/
           if-no-files-found: warn
+          retention-days: 30
