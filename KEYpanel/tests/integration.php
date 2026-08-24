@@ -21,7 +21,7 @@ $assert = static function (bool $condition, string $message) use (&$assertions):
 Database::install();
 $db = Database::connection();
 $assert(Database::installed(), 'Installed schema was not detected.');
-$assert(GenerationOptions::games($db) === ['PUBG' => 'PUBG'], 'Default game option is missing.');
+$assert(GenerationOptions::games($db) === ['PUBG' => 'PUBG Mobile'], 'Default PUBG Mobile game option is missing.');
 $defaultDurations = GenerationOptions::durations($db);
 $assert(($defaultDurations[24] ?? null) === '1 Day', 'Default 24-hour duration is missing.');
 
@@ -77,6 +77,7 @@ $request = json_encode([
 $decrypted = ApiCrypto::decryptRequest($request);
 $assert($decrypted['payload']['canary'] === $canary, 'Encrypted request canary did not round-trip.');
 $assert($decrypted['payload']['package_name'] === 'OneCore.Vip', 'OneCore.Vip package did not survive encrypted transport.');
+$assert($decrypted['payload']['certificate_sha256'] === 'B343111BBFA30ED565F9B61A52CF5B34CB2EAF0485EB8B396AB373B2ECCA53D4', 'Production signer digest did not survive encrypted transport.');
 $assert(hash_equals($sessionKey, $decrypted['key']), 'Wrapped session key did not round-trip.');
 $unexpectedEnvelope = json_decode($request, true, 16, JSON_THROW_ON_ERROR);
 $unexpectedEnvelope['debug'] = true;
