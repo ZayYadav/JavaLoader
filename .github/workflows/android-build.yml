@@ -37,9 +37,9 @@ env:
   PRODUCTION_KEY_ALIAS: 'onecore-mythos-prod'
 
 jobs:
-  pr-compile-check:
-    if: github.event_name == 'pull_request'
-    name: PR release compile check (non-distributable)
+  compile-check:
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    name: Release compile check (non-distributable)
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
@@ -72,10 +72,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          KEYSTORE="$RUNNER_TEMP/onecore-pr-compile-only.jks"
-          STORE_PASSWORD='onecore-pr-compile-only'
-          KEY_ALIAS='onecore-pr-compile-only'
-          KEY_PASSWORD='onecore-pr-compile-only'
+          KEYSTORE="$RUNNER_TEMP/onecore-compile-only.jks"
+          STORE_PASSWORD='onecore-compile-only'
+          KEY_ALIAS='onecore-compile-only'
+          KEY_PASSWORD='onecore-compile-only'
 
           keytool -genkeypair \
             -keystore "$KEYSTORE" \
@@ -86,14 +86,15 @@ jobs:
             -keyalg RSA \
             -keysize 2048 \
             -validity 30 \
-            -dname 'CN=NON DISTRIBUTABLE PR COMPILE CHECK,O=Parallax,C=IN'
+            -dname 'CN=NON DISTRIBUTABLE COMPILE CHECK,O=Parallax,C=IN'
 
           keytool -exportcert \
             -keystore "$KEYSTORE" \
             -storepass "$STORE_PASSWORD" \
             -alias "$KEY_ALIAS" \
-            -file "$RUNNER_TEMP/pr-cert.der"
-          ACTUAL_CERT_SHA256=$(sha256sum "$RUNNER_TEMP/pr-cert.der" | awk '{print toupper($1)}')
+            -file "$RUNNER_TEMP/compile-cert.der"
+          ACTUAL_CERT_SHA256=$(sha256sum "$RUNNER_TEMP/compile-cert.der" | awk '{print toupper($1)}')
+          test -n "$ACTUAL_CERT_SHA256"
           test "$ACTUAL_CERT_SHA256" != "$PRODUCTION_CERT_SHA256"
 
           {
@@ -113,7 +114,7 @@ jobs:
             -out "$RUNNER_TEMP/ci-license-private.pem" >/dev/null 2>&1
           CI_API_KEY=$(openssl pkey -in "$RUNNER_TEMP/ci-license-private.pem" \
             -pubout -outform DER 2>/dev/null | base64 -w0)
-          CI_PIN=$(printf 'onecore-pr-compile-only-pin' | openssl dgst -sha256 -binary | base64 -w0)
+          CI_PIN=$(printf 'onecore-compile-only-pin' | openssl dgst -sha256 -binary | base64 -w0)
           {
             echo "JAVA_LOADER_API_PUBLIC_KEY_B64=$CI_API_KEY"
             echo "JAVA_LOADER_TLS_PINS=sha256/$CI_PIN"
@@ -143,6 +144,7 @@ jobs:
           RELEASE_APK=$(find app/build/outputs/apk/release -type f -name '*.apk' -print -quit)
           test -n "$RELEASE_APK"
           unzip -tq "$RELEASE_APK"
+
           OUTPUT=$("$ANDROID_HOME/build-tools/$BUILD_TOOLS_VERSION/apksigner" verify \
             --verbose --print-certs "$RELEASE_APK")
           printf '%s\n' "$OUTPUT" | tee build-logs/apk-verification.txt
@@ -159,20 +161,20 @@ jobs:
             "$APKSIG_CERT_SHA256" "$PRODUCTION_CERT_SHA256" \
             > build-logs/compile-check-metadata.txt
 
-          # Never expose the temporary PR-signed APK as a downloadable artifact.
           rm -f "$RELEASE_APK"
+          test ! -e "$RELEASE_APK"
 
-      - name: Upload PR compile logs only
+      - name: Upload compile logs only
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: onecore-mythos-pr-compile-logs
+          name: onecore-mythos-compile-logs
           path: build-logs/
           if-no-files-found: warn
           retention-days: 14
 
   production-release:
-    if: github.event_name != 'pull_request'
+    if: github.event_name == 'workflow_dispatch'
     name: Production-signed release APK
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -216,26 +218,26 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -n "${ANDROID_KEYSTORE_BASE64:-}" || { echo '::error::ANDROID_KEYSTORE_BASE64 secret is required'; exit 1; }
-          test -n "${RELEASE_STORE_PASSWORD:-}" || { echo '::error::ANDROID_KEYSTORE_PASSWORD secret is required'; exit 1; }
-          test -n "${RELEASE_KEY_ALIAS:-}" || { echo '::error::ANDROID_KEY_ALIAS secret is required'; exit 1; }
-          test -n "${RELEASE_KEY_PASSWORD:-}" || { echo '::error::ANDROID_KEY_PASSWORD secret is required'; exit 1; }
-          test "$RELEASE_KEY_ALIAS" = "$PRODUCTION_KEY_ALIAS" || { echo '::error::Wrong production key alias'; exit 1; }
+          test -n "${ANDROID_KEYSTORE_BASE64:-}" || { echo '::error::ANDROID_KEYSTORE_BASE64 secret is required for a production release'; exit 1; }
+          test -n "${RELEASE_STORE_PASSWORD:-}" || { echo '::error::ANDROID_KEYSTORE_PASSWORD secret is required for a production release'; exit 1; }
+          test -n "${RELEASE_KEY_ALIAS:-}" || { echo '::error::ANDROID_KEY_ALIAS secret is required for a production release'; exit 1; }
+          test -n "${RELEASE_KEY_PASSWORD:-}" || { echo '::error::ANDROID_KEY_PASSWORD secret is required for a production release'; exit 1; }
+          test "$RELEASE_KEY_ALIAS" = "$PRODUCTION_KEY_ALIAS" || { echo '::error::ANDROID_KEY_ALIAS must be onecore-mythos-prod'; exit 1; }
 
           KEYSTORE="$RUNNER_TEMP/onecore-mythos-production.jks"
           printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE"
           test -s "$KEYSTORE"
 
-          # This also validates store password + alias before Gradle sees the key.
           keytool -exportcert \
             -keystore "$KEYSTORE" \
             -storepass "$RELEASE_STORE_PASSWORD" \
             -alias "$RELEASE_KEY_ALIAS" \
             -file "$RUNNER_TEMP/production-cert.der"
+
           ACTUAL_CERT_SHA256=$(sha256sum "$RUNNER_TEMP/production-cert.der" | awk '{print toupper($1)}')
           test "${#ACTUAL_CERT_SHA256}" -eq 64
           test "$ACTUAL_CERT_SHA256" = "$PRODUCTION_CERT_SHA256" || {
-            echo '::error::Production keystore certificate does not match the native/Java pinned certificate'
+            echo '::error::Production keystore certificate does not match the pinned OneCore MyThos signer'
             exit 1
           }
 
@@ -247,7 +249,7 @@ jobs:
             echo "JAVA_LOADER_ALLOWED_SIGNING_SHA256=$PRODUCTION_CERT_SHA256"
           } >> "$GITHUB_ENV"
 
-          echo "Production keystore certificate verified: $PRODUCTION_CERT_SHA256"
+          echo "Production signer verified: $PRODUCTION_CERT_SHA256"
 
       - name: Require production licensing configuration
         shell: bash
@@ -258,7 +260,7 @@ jobs:
           test -n "${JAVA_LOADER_LICENSE_URL:-}" || { echo '::error::JAVA_LOADER_LICENSE_URL repository variable is required'; exit 1; }
           case "$JAVA_LOADER_LICENSE_URL" in
             https://*/api/v2/connect) ;;
-            *) echo '::error::JAVA_LOADER_LICENSE_URL must be the HTTPS /api/v2/connect endpoint'; exit 1 ;;
+            *) echo '::error::JAVA_LOADER_LICENSE_URL must be an HTTPS /api/v2/connect endpoint'; exit 1 ;;
           esac
           if [ -z "${JAVA_LOADER_GAME_ID:-}" ]; then
             JAVA_LOADER_GAME_ID='PUBG'
@@ -302,8 +304,9 @@ jobs:
           APKSIG_CERT_SHA256=$(printf '%s\n' "$OUTPUT" \
             | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' \
             | tr -d ':' | tr '[:lower:]' '[:upper:]' | head -n1)
+          test -n "$APKSIG_CERT_SHA256"
           test "$APKSIG_CERT_SHA256" = "$PRODUCTION_CERT_SHA256" || {
-            echo "::error::Built APK is NOT signed by OneCore MyThos production key"
+            echo '::error::Built APK is not signed by OneCore MyThos production key'
             exit 1
           }
 
