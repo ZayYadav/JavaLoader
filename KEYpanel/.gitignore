@@ -1,0 +1,15 @@
+/.env
+/.env.*
+!/.env.example
+/runtime/*
+!/runtime/.gitkeep
+!/runtime/.htaccess
+*.log
+*.bak
+*.zip
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
